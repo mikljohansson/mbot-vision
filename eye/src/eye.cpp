@@ -28,7 +28,7 @@ const char *hostname = "mbot";
 #define MV_LED_PIN      33
 #define MV_FLASH_PIN    12
 #define MV_FLASH_CHAN   0
-#define MV_FLASH_MAX    150
+#define MV_FLASH_MAX    255
 
 // I2C bus for display
 #define MV_SDA_PIN      13
@@ -189,12 +189,21 @@ void handleIndex() {
             xmlHttp.send(null);
         };
         
-        // https://gist.github.com/nmsdvid/8807205#gistcomment-3325286
         const debounce = (callback, wait = 250) => {
-            let timer;
+            let timeout = null;
+            let useargs = null;
+
             return (...args) => {
-                clearTimeout(timer);
-                timer = setTimeout(() => callback(...args), wait);
+                if (!timeout) {
+                    useargs = args;
+                    timeout = setTimeout(() => {
+                        timeout = null;
+                        callback(...useargs);
+                    }, wait);
+                }
+                else {
+                    useargs = args;
+                }
             };
         };
 
@@ -202,12 +211,43 @@ void handleIndex() {
             post(`/flash?v=${value}`);
         });
     </script>
+    <style>
+      .body {
+        background-color: #000;
+        display: flex;
+        justify-content: center;
+      }
+
+      .container {
+        width: 100%;
+        height: 100%;
+        max-width: 800px;
+        max-height: 600px;
+        padding: 5px;
+        background-image: url("/stream");
+        background-repeat: no-repeat;
+        background-size: contain;
+        background-position: top center;
+      }
+
+      .container td {
+        vertical-align: top;
+      }
+
+      .inputcell {
+        width: 99%;
+      }
+
+      .container input {
+        width: 100%;
+      }
+    </style>
   </head>
-  <body style="background-color: #000;">
-    <div>
-        <input style="width:100%; max-width:800px" type="range" min="0" max="150" value="0" id="flash" oninput="handleFlash(this.value);" onchange="handleFlash(this.value);">
-    </div>
-    <img src="/stream" width="800" height="600" />
+  <body class="body">
+    <table class="container">
+      <td>&#x1F4A1;</td>
+      <td class="inputcell"><input type="range" min="0" max="175" value="0" id="flash" oninput="handleFlash(this.value);" onchange="handleFlash(this.value);"></td>
+    </table>
   <body>
 <html>)doc";
 
@@ -220,7 +260,7 @@ void handleFlash() {
     int duty = value.toInt();
     duty = std::max(0, std::min(duty, MV_FLASH_MAX));
     
-    if (duty < MV_FLASH_MAX / 10) {
+    if (duty < MV_FLASH_MAX / 15) {
         duty = 0;
     }
 
