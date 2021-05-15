@@ -6,6 +6,7 @@
 
 void httpdInit();
 void httpdLoop();
+size_t httpdStreamCount();
 void httpdSendStream(camera_fb_t *fb);
 
 #endif

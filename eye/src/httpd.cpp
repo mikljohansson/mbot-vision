@@ -23,21 +23,23 @@ void httpdLoop() {
     server.handleClient();
 }
 
-size_t httpdWriteStream(void * arg, size_t index, const void* data, size_t len) {
-    size_t written = 0;
-    
-    for (int i = 0; i < streams.size(); ) {
+size_t httpdWriteStream(void *arg, size_t index, const void *data, size_t len) {
+    for (int i = 0; i < streams.size(); i++) {
         WiFiClient *client = streams[i];
-        if (client->connected()) {
-            written = max(client->write((const char *)data, len), written);
+        if (data && client->connected()) {
+            client->write((const char *)data, len);
         }
     }
 
-    return written;
+    return len;
+}
+
+size_t httpdStreamCount() {
+    return streams.size();
 }
 
 void httpdSendStream(camera_fb_t *fb) {
-    for (int i = 0; i < streams.size(); ) {
+    for (int i = 0; i < streams.size(); i++) {
         WiFiClient *client = streams[i];
         if (client->connected()) {
             client->write("--gc0p4Jq0M2Yt08jU534c0p\r\n");
@@ -45,7 +47,7 @@ void httpdSendStream(camera_fb_t *fb) {
         }
     }
 
-    if (!frame2jpg_cb(fb, 25, httpdWriteStream, 0)) {
+    if (!frame2jpg_cb(fb, 35, httpdWriteStream, 0)) {
         Serial.println("Failed to convert framebuffer to jpeg");
     }
 
@@ -59,8 +61,10 @@ void httpdSendStream(camera_fb_t *fb) {
             i++;
         }
         else {
-            delete client;
+            Serial.print("HTTP stream disconnected: ");
+            Serial.println(client->remoteIP());
             streams.erase(streams.begin() + i);
+            delete client;
         }
     }
 }
@@ -110,8 +114,8 @@ void handleIndex() {
       .container {
         width: 100%;
         height: 100%;
-        max-width: 800px;
-        max-height: 600px;
+        max-width: 320px;
+        max-height: 240px;
         padding: 5px;
         background-image: url("/stream");
         background-repeat: no-repeat;
@@ -166,6 +170,9 @@ void handleJpegStream() {
     client->write("HTTP/1.1 200 OK\r\n");
     client->write("Content-Type: multipart/x-mixed-replace; boundary=gc0p4Jq0M2Yt08jU534c0p\r\n\r\n");
     streams.push_back(client);
+
+    Serial.print("HTTP stream connected: ");
+    Serial.println(client->remoteIP());
 }
 
 void handleNotFound() {

@@ -26,8 +26,17 @@ const char *hostname = "mbot";
 Adafruit_SSD1306 oled(128, 32);
 WiFiMulti wifiMulti;
 
+// Framerate calculation
+double windowTime;
+double windowFrames;
+unsigned long lastUpdatedWindow;
+unsigned long lastShowedFramerate = 0;
+
 template <typename... T>
 void oledPrint(const char *message, T... args);
+
+template <typename... T>
+void serialPrint(const char *message, T... args);
 
 void setup() {
     pinMode(MV_LED_PIN, OUTPUT);
@@ -41,6 +50,11 @@ void setup() {
     while (!Serial);
     Serial.println("Starting up");
 
+    serialPrint("Total heap: %d\n", ESP.getHeapSize());
+    serialPrint("Free heap: %d\n", ESP.getFreeHeap());
+    serialPrint("Total PSRAM: %d\n", ESP.getPsramSize());
+    serialPrint("Free PSRAM: %d\n", ESP.getFreePsram());
+
     // Initialize display
     Wire.setPins(MV_SDA_PIN, MV_SCL_PIN);
     oled.begin();
@@ -52,18 +66,21 @@ void setup() {
     oledPrint("WiFi connecting");
     for (auto network : wifiNetworks) {
         wifiMulti.addAP(network.ssid, network.password);
-        Serial.print("Added WiFi AP: ");
-        Serial.print(network.ssid);
-        Serial.print(" ");
-        Serial.println(network.password);
+        serialPrint("Added WiFi AP: %s %s\n", network.ssid, network.password);
     }
 
-    WiFi.mode(WIFI_STA);
-    WiFi.setHostname(hostname);
-    WiFi.setAutoReconnect(true);
+    while (true) {
+        WiFi.mode(WIFI_STA);
+        WiFi.setHostname(hostname);
+        WiFi.setAutoReconnect(true);
     
-    while (wifiMulti.run() != WL_CONNECTED) {
-        delay(500);
+        if (wifiMulti.run() == WL_CONNECTED) {
+            break;
+        }
+
+        WiFi.disconnect(true);
+        WiFi.mode(WIFI_OFF);
+        delay(500);        
         Serial.print(".");
     }
 
@@ -89,11 +106,8 @@ void setup() {
     //while (!Serial1);
 
     IPAddress ip = WiFi.localIP();
-    Serial.print("\nWiFi connected. IP: ");
-    Serial.print(ip);
-    Serial.print(", hostname: ");
-    Serial.println(WiFi.getHostname());
-    oledPrint("Host: %s\nIP: %s", WiFi.getHostname(), ip.toString().c_str());
+    serialPrint("Hostname: %s IP: %s\n", WiFi.getHostname(), ip.toString().c_str());
+    oledPrint("%s %s", WiFi.getHostname(), ip.toString().c_str());
 
     digitalWrite(MV_LED_PIN, HIGH);
     Serial.println("Setup complete");
@@ -103,14 +117,34 @@ void loop() {
     // Service HTTP requests
     httpdLoop();
 
-    // Grab a frame from the camera
-    camera_fb_t *fb = esp_camera_fb_get();
+    if (httpdStreamCount() > 0) {
+        // Send a frame from the camera
+        camera_fb_t *fb = esp_camera_fb_get();
+        httpdSendStream(fb);
+        esp_camera_fb_return(fb);
 
-    // Send frame to each connected client
-    httpdSendStream(fb);
+        // Calculate the framerate
+        while (windowFrames >= 25.0) {
+            windowTime -= (windowTime / windowFrames);
+            windowFrames--;
+        }
 
-    // Return framebuffer for reuse
-    esp_camera_fb_return(fb);
+        unsigned long ts = millis();
+        windowTime += (ts - lastUpdatedWindow);
+        windowFrames++;
+        lastUpdatedWindow = ts;
+
+        // Display the framerate
+        if (ts - lastShowedFramerate > 5000) {
+            serialPrint("Framerate: %02f\n", windowFrames / (windowTime / 1000.0));
+            lastShowedFramerate = ts;
+        }
+    }
+    else {
+        windowTime = 1;
+        windowFrames = 0;
+        lastUpdatedWindow = millis();
+    }
 }
 
 template <typename... T>
@@ -122,8 +156,18 @@ void oledPrint(const char *message, T... args) {
     if (len) {
         char buf[len];
         sprintf(buf, message, args...);
-        oled.println(buf);
+        oled.print(buf);
     }
     
     oled.display();
+}
+
+template <typename... T>
+void serialPrint(const char *message, T... args) {
+    int len = snprintf(NULL, 0, message, args...);
+    if (len) {
+        char buf[len];
+        sprintf(buf, message, args...);
+        Serial.print(buf);
+    }
 }
