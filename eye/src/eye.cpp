@@ -8,6 +8,7 @@
 #include <esp_camera.h>
 #include "camera.h"
 #include "httpd.h"
+#include "model.h"
 #include "wiring.h"
 
 typedef struct _WifiNetwork {
@@ -109,8 +110,15 @@ void setup() {
     serialPrint("Hostname: %s IP: %s\n", WiFi.getHostname(), ip.toString().c_str());
     oledPrint("%s %s", WiFi.getHostname(), ip.toString().c_str());
 
+    // Load the ML model
+    modelInit();
+
     digitalWrite(MV_LED_PIN, HIGH);
     Serial.println("Setup complete");
+}
+
+void detect(camera_fb_t *fb) {
+
 }
 
 void loop() {
@@ -120,6 +128,7 @@ void loop() {
     if (httpdStreamCount() > 0) {
         // Send a frame from the camera
         camera_fb_t *fb = esp_camera_fb_get();
+        //detect(fb);        
         httpdSendStream(fb);
         esp_camera_fb_return(fb);
 
