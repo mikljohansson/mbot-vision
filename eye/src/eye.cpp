@@ -5,12 +5,10 @@
 #include <WiFi.h>
 #include <WiFiMulti.h>
 #include <WiFiClient.h>
-#include <WebServer.h>
-//#include <AsyncTCP.h>
-//#include <ESPAsyncWebServer.h>
-#include <OV2640.h>
-#include <OV2640Streamer.h>
-#include <CRtspSession.h>
+#include <esp_camera.h>
+#include "camera.h"
+#include "httpd.h"
+#include "wiring.h"
 
 typedef struct _WifiNetwork {
     const char *ssid;
@@ -25,37 +23,11 @@ WifiNetwork wifiNetworks[] = {
 
 const char *hostname = "mbot";
 
-#define MV_LED_PIN      33
-#define MV_FLASH_PIN    12
-#define MV_FLASH_CHAN   0
-#define MV_FLASH_MAX    255
-
-// I2C bus for display
-#define MV_SDA_PIN      13
-#define MV_SCL_PIN      15
-
-// UART comms with MBot
-#define MV_UTX_PIN      14
-#define MV_URX_PIN      2
-
 Adafruit_SSD1306 oled(128, 32);
-OV2640 cam;
 WiFiMulti wifiMulti;
-WebServer server(80);
-WiFiServer rtspServer(8554);
-CStreamer *streamer;
-
-std::vector<WiFiClient *> streams;
 
 template <typename... T>
 void oledPrint(const char *message, T... args);
-
-void handleIndex();
-void handleFlash();
-void handleJpegStream();
-void handleJpeg();
-void handleNotFound();
-void loopRTSP();
 
 void setup() {
     pinMode(MV_LED_PIN, OUTPUT);
@@ -97,22 +69,18 @@ void setup() {
 
     // Initialize camera
     oledPrint("Init camera");
-    if (cam.init(esp32cam_aithinker_config) != ESP_OK) {
-        oledPrint("Camera failed");
-        while (true);
+    while (true) {
+        esp_err_t err = esp_camera_init(&mv_camera_aithinker_config);
+        if (err == ESP_OK) {
+            break;
+        }
+
+        oledPrint("Camera probe failed with error 0x%x", err);
+        delay(250);
     }
 
     // Start webserver
-    server.on("/", HTTP_GET, handleIndex);
-    server.on("/flash", HTTP_POST, handleFlash);
-    server.on("/stream", HTTP_GET, handleJpegStream);
-    server.on("/jpg", HTTP_GET, handleJpeg);
-    server.onNotFound(handleNotFound);
-    server.begin();
-
-    // Start RTSP server
-    rtspServer.begin();
-    streamer = new OV2640Streamer(cam);
+    httpdInit();
 
     // Connect to Mbot
     //oledPrint("Connecting to MBot");
@@ -133,32 +101,16 @@ void setup() {
 
 void loop() {
     // Service HTTP requests
-    server.handleClient();
+    httpdLoop();
 
-    // Service RTSP clients
-    loopRTSP();
+    // Grab a frame from the camera
+    camera_fb_t *fb = esp_camera_fb_get();
 
-    // Take a snapshot
-    cam.run();
+    // Send frame to each connected client
+    httpdSendStream(fb);
 
-    // Send snapshot to each stream client
-    for (int i = 0; i < streams.size(); ) {
-        WiFiClient *client = streams[i];
-        if (client->connected()) {
-            client->write("--gc0p4Jq0M2Yt08jU534c0p\r\n");
-            client->write("Content-Type: image/jpeg\r\n\r\n");
-            client->write((char *)cam.getfb(), cam.getSize());
-            client->write("\r\n");
-        }
-        
-        if (client->connected()) {
-            i++;
-        }
-        else {
-            delete client;
-            streams.erase(streams.begin() + i);
-        }
-    }
+    // Return framebuffer for reuse
+    esp_camera_fb_return(fb);
 }
 
 template <typename... T>
@@ -174,164 +126,4 @@ void oledPrint(const char *message, T... args) {
     }
     
     oled.display();
-}
-
-void handleIndex() {
-    String response = "HTTP/1.1 200 OK\r\n";
-    response += "Content-Type: text/html\r\n\r\n";
-    response += R"doc(<html>
-  <head>
-    <link rel="icon" href="data:;base64,=">
-    <script type="text/javascript">
-        const post = (url) => {
-            var xmlHttp = new XMLHttpRequest();
-            xmlHttp.open("POST", url, true);
-            xmlHttp.send(null);
-        };
-        
-        const debounce = (callback, wait = 250) => {
-            let timeout = null;
-            let useargs = null;
-
-            return (...args) => {
-                if (!timeout) {
-                    useargs = args;
-                    timeout = setTimeout(() => {
-                        timeout = null;
-                        callback(...useargs);
-                    }, wait);
-                }
-                else {
-                    useargs = args;
-                }
-            };
-        };
-
-        const handleFlash = debounce((value) => {
-            post(`/flash?v=${value}`);
-        });
-    </script>
-    <style>
-      .body {
-        background-color: #000;
-        display: flex;
-        justify-content: center;
-      }
-
-      .container {
-        width: 100%;
-        height: 100%;
-        max-width: 800px;
-        max-height: 600px;
-        padding: 5px;
-        background-image: url("/stream");
-        background-repeat: no-repeat;
-        background-size: contain;
-        background-position: top center;
-      }
-
-      .container td {
-        vertical-align: top;
-      }
-
-      .inputcell {
-        width: 99%;
-      }
-
-      .container input {
-        width: 100%;
-      }
-    </style>
-  </head>
-  <body class="body">
-    <table class="container">
-      <td>&#x1F4A1;</td>
-      <td class="inputcell"><input type="range" min="0" max="175" value="0" id="flash" oninput="handleFlash(this.value);" onchange="handleFlash(this.value);"></td>
-    </table>
-  <body>
-<html>)doc";
-
-    server.sendContent(response);
-    server.sendContent("\r\n");
-}
-
-void handleFlash() {
-    String value = server.arg(0);
-    int duty = value.toInt();
-    duty = std::max(0, std::min(duty, MV_FLASH_MAX));
-    
-    if (duty < MV_FLASH_MAX / 15) {
-        duty = 0;
-    }
-
-    Serial.println("Turning flash to value " + value);
-    ledcWrite(MV_FLASH_CHAN, duty);
-    
-    WiFiClient client = server.client();
-    client.write("HTTP/1.1 200 OK\r\n");
-}
-
-void handleJpegStream() {
-    WiFiClient *client = new WiFiClient();
-    *client = server.client();
-    client->write("HTTP/1.1 200 OK\r\n");
-    client->write("Content-Type: multipart/x-mixed-replace; boundary=gc0p4Jq0M2Yt08jU534c0p\r\n\r\n");
-    streams.push_back(client);
-}
-
-void handleJpeg() {
-    WiFiClient client = server.client();
-
-    cam.run();
-    if (!client.connected()) {
-        return;
-    }
-
-    String response = "HTTP/1.1 200 OK\r\n";
-    response += "Content-Disposition: inline; filename=capture.jpg\r\n";
-    response += "Content-Type: image/jpeg\r\n\r\n";
-    server.sendContent(response);
-    client.write((char *)cam.getfb(), cam.getSize());
-}
-
-void handleNotFound() {
-    String message = "Server is running!\n\n";
-    message += "URI: ";
-    message += server.uri();
-    message += "\nMethod: ";
-    message += (server.method() == HTTP_GET) ? "GET" : "POST";
-    message += "\nArguments: ";
-    message += server.args();
-    message += "\n";
-    server.send(200, "text/plain", message);
-}
-
-void loopRTSP() {
-    uint32_t msecPerFrame = 100;
-    static uint32_t lastimage = millis();
-
-    // If we have an active client connection, just service that until gone
-    streamer->handleRequests(0); // we don't use a timeout here,
-    // instead we send only if we have new enough frames
-    uint32_t now = millis();
-    if(streamer->anySessions()) {
-        if(now > lastimage + msecPerFrame || now < lastimage) { // handle clock rollover
-            streamer->streamImage(now);
-            lastimage = now;
-
-            // check if we are overrunning our max frame rate
-            now = millis();
-            if(now > lastimage + msecPerFrame) {
-                printf("warning exceeding max frame rate of %d ms\n", now - lastimage);
-            }
-        }
-    }
-    
-    WiFiClient rtspClient = rtspServer.accept();
-    if(rtspClient) {
-        Serial.print("client: ");
-        Serial.print(rtspClient.remoteIP());
-        Serial.println();
-        streamer->addSession(rtspClient);
-    }
 }
