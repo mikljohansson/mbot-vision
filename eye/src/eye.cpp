@@ -6,10 +6,12 @@
 #include <WiFiMulti.h>
 #include <WiFiClient.h>
 #include <esp_camera.h>
+#include <esp_wifi.h>
 #include "camera.h"
 #include "httpd.h"
 #include "model.h"
 #include "wiring.h"
+#include "common.h"
 
 typedef struct _WifiNetwork {
     const char *ssid;
@@ -36,9 +38,6 @@ unsigned long lastShowedFramerate = 0;
 template <typename... T>
 void oledPrint(const char *message, T... args);
 
-template <typename... T>
-void serialPrint(const char *message, T... args);
-
 void setup() {
     pinMode(MV_LED_PIN, OUTPUT);
     digitalWrite(MV_LED_PIN, LOW);
@@ -51,11 +50,6 @@ void setup() {
     while (!Serial);
     Serial.println("Starting up");
 
-    serialPrint("Total heap: %d\n", ESP.getHeapSize());
-    serialPrint("Free heap: %d\n", ESP.getFreeHeap());
-    serialPrint("Total PSRAM: %d\n", ESP.getPsramSize());
-    serialPrint("Free PSRAM: %d\n", ESP.getFreePsram());
-
     // Initialize display
     Wire.setPins(MV_SDA_PIN, MV_SCL_PIN);
     oled.begin();
@@ -63,26 +57,32 @@ void setup() {
     oled.setTextSize(1);
     oledPrint("Starting up");
     
+    // Load the ML model
+    modelInit();
+
     // Connect to Wifi
     oledPrint("WiFi connecting");
     for (auto network : wifiNetworks) {
         wifiMulti.addAP(network.ssid, network.password);
         serialPrint("Added WiFi AP: %s %s\n", network.ssid, network.password);
     }
+        
+    WiFi.mode(WIFI_STA);
+    WiFi.setHostname(hostname);
+    WiFi.setAutoReconnect(true);
+
+    // https://github.com/espressif/esp-idf/issues/1366#issuecomment-569377207
+    WiFi.persistent(false);
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    cfg.nvs_enable = 0;
 
     while (true) {
-        WiFi.mode(WIFI_STA);
-        WiFi.setHostname(hostname);
-        WiFi.setAutoReconnect(true);
-    
         if (wifiMulti.run() == WL_CONNECTED) {
             break;
         }
 
-        WiFi.disconnect(true);
-        WiFi.mode(WIFI_OFF);
-        delay(500);        
         Serial.print(".");
+        delay(1000);
     }
 
     // Initialize camera
@@ -109,9 +109,6 @@ void setup() {
     IPAddress ip = WiFi.localIP();
     serialPrint("Hostname: %s IP: %s\n", WiFi.getHostname(), ip.toString().c_str());
     oledPrint("%s %s", WiFi.getHostname(), ip.toString().c_str());
-
-    // Load the ML model
-    modelInit();
 
     digitalWrite(MV_LED_PIN, HIGH);
     Serial.println("Setup complete");
@@ -169,14 +166,4 @@ void oledPrint(const char *message, T... args) {
     }
     
     oled.display();
-}
-
-template <typename... T>
-void serialPrint(const char *message, T... args) {
-    int len = snprintf(NULL, 0, message, args...);
-    if (len) {
-        char buf[len];
-        sprintf(buf, message, args...);
-        Serial.print(buf);
-    }
 }
