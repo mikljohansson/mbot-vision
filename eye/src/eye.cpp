@@ -9,7 +9,6 @@
 #include <esp_wifi.h>
 #include "camera.h"
 #include "httpd.h"
-#include "model.h"
 #include "wiring.h"
 #include "common.h"
 
@@ -56,9 +55,6 @@ void setup() {
     oled.setTextColor(1);
     oled.setTextSize(1);
     oledPrint("Starting up");
-    
-    // Load the ML model
-    modelInit();
 
     // Connect to Wifi
     oledPrint("WiFi connecting");
