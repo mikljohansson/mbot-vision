@@ -21,7 +21,8 @@
 			"vector": "cpp",
 			"memory": "cpp",
 			"random": "cpp",
-			"initializer_list": "cpp"
+			"initializer_list": "cpp",
+			"tensor": "cpp"
 		}
 	}
 }

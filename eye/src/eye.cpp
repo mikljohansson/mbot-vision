@@ -7,6 +7,7 @@
 #include <WiFiClient.h>
 #include <esp_camera.h>
 #include <esp_wifi.h>
+#include <ESP32Ping.h>
 #include "camera.h"
 #include "httpd.h"
 #include "wiring.h"
@@ -18,7 +19,6 @@ typedef struct _WifiNetwork {
 } WifiNetwork;
 
 WifiNetwork wifiNetworks[] = {
-    {"krokodil-zyxel", "mistress"},
     {"krokodil", "mistress"},
     {"dlink-BF60", "ptfmm78341"},
 };
@@ -30,7 +30,7 @@ WiFiMulti wifiMulti;
 
 // Framerate calculation
 double windowTime;
-double windowFrames;
+unsigned long windowFrames;
 unsigned long lastUpdatedWindow;
 unsigned long lastShowedFramerate = 0;
 
@@ -80,6 +80,18 @@ void setup() {
         Serial.print(".");
         delay(1000);
     }
+    delay(500);
+
+    IPAddress ip = WiFi.localIP();
+    serialPrint("\nHostname: %s\n", WiFi.getHostname());
+    serialPrint("IP: %s\n", ip.toString().c_str());
+    serialPrint("Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
+    serialPrint("DNS: %s\n\n", WiFi.dnsIP(0).toString().c_str());
+
+    // Send a ping to the router
+    bool ret = Ping.ping(WiFi.gatewayIP(), 1);
+    delay(500);
+    Serial.println(ret ? "Internet gateway was reachable" : "Not able to reach internet gateway");
 
     // Initialize camera
     oledPrint("Init camera");
@@ -102,8 +114,6 @@ void setup() {
     //Serial1.begin(115200, SERIAL_8N1, MV_URX_PIN, MV_UTX_PIN);
     //while (!Serial1);
 
-    IPAddress ip = WiFi.localIP();
-    serialPrint("Hostname: %s IP: %s\n", WiFi.getHostname(), ip.toString().c_str());
     oledPrint("%s %s", WiFi.getHostname(), ip.toString().c_str());
 
     digitalWrite(MV_LED_PIN, HIGH);
@@ -121,13 +131,13 @@ void loop() {
     if (httpdStreamCount() > 0) {
         // Send a frame from the camera
         camera_fb_t *fb = esp_camera_fb_get();
-        //detect(fb);        
+        //detect(fb);
         httpdSendStream(fb);
         esp_camera_fb_return(fb);
 
         // Calculate the framerate
-        while (windowFrames >= 25.0) {
-            windowTime -= (windowTime / windowFrames);
+        while (windowFrames >= 10.0) {
+            windowTime -= (windowTime / (double)windowFrames);
             windowFrames--;
         }
 
@@ -138,7 +148,7 @@ void loop() {
 
         // Display the framerate
         if (ts - lastShowedFramerate > 5000) {
-            serialPrint("Framerate: %02f\n", windowFrames / (windowTime / 1000.0));
+            serialPrint("Framerate: %02f\n", (double)windowFrames / (windowTime / 1000.0));
             lastShowedFramerate = ts;
         }
     }

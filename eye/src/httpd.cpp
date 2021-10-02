@@ -39,24 +39,26 @@ size_t httpdStreamCount() {
 }
 
 void httpdSendStream(camera_fb_t *fb) {
-    for (int i = 0; i < streams.size(); i++) {
-        WiFiClient *client = streams[i];
-        if (client->connected()) {
-            client->write("--gc0p4Jq0M2Yt08jU534c0p\r\n");
-            client->write("Content-Type: image/jpeg\r\n\r\n");
-        }
+    String headers = "\r\n--gc0p4Jq0M2Yt08jU534c0p\r\nContent-Type: image/jpeg\r\n";
+
+    if (fb->format == PIXFORMAT_JPEG) {
+        headers += "Content-Length: ";
+        headers += fb->len;
+        headers += "\r\n";
     }
 
-    if (!frame2jpg_cb(fb, 35, httpdWriteStream, 0)) {
+    headers += "\r\n";
+    httpdWriteStream(0, 0, headers.c_str(), headers.length());
+
+    if (fb->format == PIXFORMAT_JPEG) {
+        httpdWriteStream(0, 0, fb->buf, fb->len);
+    }
+    else if (!frame2jpg_cb(fb, 25, httpdWriteStream, 0)) {
         Serial.println("Failed to convert framebuffer to jpeg");
     }
 
     for (int i = 0; i < streams.size(); ) {
         WiFiClient *client = streams[i];
-        if (client->connected()) {
-            client->write("\r\n");
-        }
-        
         if (client->connected()) {
             i++;
         }
@@ -69,10 +71,7 @@ void httpdSendStream(camera_fb_t *fb) {
     }
 }
 
-void handleIndex() {
-    String response = "HTTP/1.1 200 OK\r\n";
-    response += "Content-Type: text/html\r\n\r\n";
-    response += R"doc(<html>
+String indexDocument = R"doc(<html>
   <head>
     <link rel="icon" href="data:;base64,=">
     <script type="text/javascript">
@@ -144,8 +143,10 @@ void handleIndex() {
   <body>
 <html>)doc";
 
-    server.sendContent(response);
-    server.sendContent("\r\n");
+void handleIndex() {
+    Serial.print("Sending index.html to: ");
+    Serial.println(server.client().remoteIP());
+    server.send(200, "text/html", indexDocument);
 }
 
 void handleFlash() {
@@ -160,15 +161,17 @@ void handleFlash() {
     Serial.println("Turning flash to value " + value);
     ledcWrite(MV_FLASH_CHAN, duty);
     
-    WiFiClient client = server.client();
-    client.write("HTTP/1.1 200 OK\r\n");
+    Serial.print("Setting flash to: ");
+    Serial.println(value);
+
+    server.send(200, "text/plain", "OK");
 }
 
 void handleJpegStream() {
     WiFiClient *client = new WiFiClient();
     *client = server.client();
     client->write("HTTP/1.1 200 OK\r\n");
-    client->write("Content-Type: multipart/x-mixed-replace; boundary=gc0p4Jq0M2Yt08jU534c0p\r\n\r\n");
+    client->write("Content-Type: multipart/x-mixed-replace; boundary=gc0p4Jq0M2Yt08jU534c0p\r\n");
     streams.push_back(client);
 
     Serial.print("HTTP stream connected: ");
