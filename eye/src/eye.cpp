@@ -48,6 +48,8 @@ void setup() {
     Serial.begin(115200);
     while (!Serial);
     Serial.println("Starting up");
+    Serial.printf("Core %d, clock %d MHz\n", xPortGetCoreID(), getCpuFrequencyMhz());
+    Serial.printf("  XTAL %d MHz, APB %d MHz\n\n", getXtalFrequencyMhz(), getApbFrequency() / 1000000);
 
     // Initialize display
     Wire.setPins(MV_SDA_PIN, MV_SCL_PIN);
@@ -118,6 +120,8 @@ void setup() {
 
     digitalWrite(MV_LED_PIN, HIGH);
     Serial.println("Setup complete");
+
+    ledcWrite(MV_FLASH_CHAN, 0);
 }
 
 void detect(camera_fb_t *fb) {
@@ -157,6 +161,8 @@ void loop() {
         windowFrames = 0;
         lastUpdatedWindow = millis();
     }
+
+    yield();
 }
 
 template <typename... T>

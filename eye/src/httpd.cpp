@@ -23,12 +23,23 @@ void httpdLoop() {
     server.handleClient();
 }
 
+void send(WiFiClient *client, const void *data, size_t len) {
+    size_t written = 0;
+
+    while (data && client->connected() && written < len) {
+        written += client->write(((const uint8_t *)data) + written, len);
+        yield();
+    }
+}
+
+void send(WiFiClient *client, const char *data) {
+    send(client, data, strlen(data));
+}
+
 size_t httpdWriteStream(void *arg, size_t index, const void *data, size_t len) {
     for (int i = 0; i < streams.size(); i++) {
         WiFiClient *client = streams[i];
-        if (data && client->connected()) {
-            client->write((const char *)data, len);
-        }
+        send(client, data, len);
     }
 
     return len;
@@ -170,8 +181,7 @@ void handleFlash() {
 void handleJpegStream() {
     WiFiClient *client = new WiFiClient();
     *client = server.client();
-    client->write("HTTP/1.1 200 OK\r\n");
-    client->write("Content-Type: multipart/x-mixed-replace; boundary=gc0p4Jq0M2Yt08jU534c0p\r\n");
+    send(client, "HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=gc0p4Jq0M2Yt08jU534c0p\r\n");
     streams.push_back(client);
 
     Serial.print("HTTP stream connected: ");

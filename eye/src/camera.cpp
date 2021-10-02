@@ -24,14 +24,14 @@ camera_config_t mv_camera_aithinker_config {
     .pin_href = 23,
     .pin_pclk = 22,
     .xclk_freq_hz = 20000000,
-    .ledc_timer = LEDC_TIMER_0,
-    .ledc_channel = LEDC_CHANNEL_0,
+    .ledc_timer = LEDC_TIMER_1,
+    .ledc_channel = LEDC_CHANNEL_1,
     .pixel_format = PIXFORMAT_JPEG,
     // .frame_size = FRAMESIZE_UXGA, // needs 234K of framebuffer space
     // .frame_size = FRAMESIZE_SXGA, // needs 160K for framebuffer
     // .frame_size = FRAMESIZE_XGA, // needs 96K or even smaller FRAMESIZE_SVGA - can work if using only 1 fb
     //.frame_size = FRAMESIZE_QVGA,
     .frame_size = FRAMESIZE_VGA,
-    .jpeg_quality = 20, //0-63 lower numbers are higher quality
+    .jpeg_quality = 63, //0-63 lower numbers are higher quality
     .fb_count = 2       // if more than one i2s runs in continous mode.  Use only with jpeg
 };
