@@ -156,5 +156,5 @@ void cameraCaptureFrame(void *p) {
 
 void cameraRun() {
     fbqueue = new FrameBufferQueue();
-    xTaskCreatePinnedToCore(cameraCaptureFrame, "camera", 10000, NULL, 1, &cameraTask, 0);
+    xTaskCreatePinnedToCore(cameraCaptureFrame, "camera", 10000, NULL, 2, &cameraTask, 0);
 }

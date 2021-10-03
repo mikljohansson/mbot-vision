@@ -57,7 +57,7 @@ class JpegStream {
                     if (fb->format == PIXFORMAT_JPEG) {
                         send(fb->buf, fb->len);
                     }
-                    else if (!frame2jpg_cb(fb, 25, sendStatic, this)) {
+                    else if (!frame2jpg_cb(fb, 40, sendStatic, this)) {
                         Serial.println("Failed to convert framebuffer to jpeg");
                     }
 

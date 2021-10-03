@@ -10,6 +10,7 @@
 #include "camera.h"
 #include "httpd.h"
 #include "wiring.h"
+#include "blobdetector.h"
 #include "common.h"
 
 typedef struct _WifiNetwork {
@@ -27,8 +28,7 @@ const char *hostname = "mbot";
 Adafruit_SSD1306 oled(128, 32);
 WiFiMulti wifiMulti;
 
-template <typename... T>
-void oledPrint(const char *message, T... args);
+BlobDetector detector({255, 0, 0});
 
 void setup() {
     pinMode(MV_LED_PIN, OUTPUT);
@@ -101,6 +101,9 @@ void setup() {
 
     // Start webserver
     httpdRun();
+
+    // Start color detector
+    detector.start();
 
     digitalWrite(MV_LED_PIN, HIGH);
     Serial.println("Setup complete");
