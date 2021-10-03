@@ -16,10 +16,10 @@ class JpegStream {
 
     public:
         JpegStream(const WiFiClient &client)
-         : _client(client), _framerate("HTTP stream framerate: %02f\n") {}
+         : _client(client), _framerate("Stream framerate: %02f\n") {}
 
         void start() {
-            Serial.print("HTTP stream connected: ");
+            Serial.print("Stream connected: ");
             Serial.println(_client.remoteIP());
             xTaskCreatePinnedToCore(runStatic, "jpegStream", 10000, this, 1, &_task, 1);
         }
