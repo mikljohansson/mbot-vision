@@ -24,6 +24,8 @@ void cameraCaptureFrame(void *p) {
         delay(250);
     }
 
+    lastUpdatedWindow = millis();
+
     while (true) {
         camera_fb_t *fb = esp_camera_fb_get();
 

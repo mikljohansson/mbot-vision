@@ -24,11 +24,8 @@ class JpegStream {
 
     private:
         void send(const void *data, size_t len) {
-            size_t written = 0;
-
-            while (data && _client.connected() && written < len) {
-                written += _client.write(((const uint8_t *)data) + written, len);
-                yield();
+            for (size_t written = 0; data && _client.connected() && written < len; yield()) {
+                written += _client.write(((const uint8_t *)data) + written, len - written);
             }
         }
 
