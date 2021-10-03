@@ -73,6 +73,6 @@ camera_config_t mv_camera_aithinker_config {
     // .frame_size = FRAMESIZE_XGA, // needs 96K or even smaller FRAMESIZE_SVGA - can work if using only 1 fb
     //.frame_size = FRAMESIZE_QVGA,
     .frame_size = FRAMESIZE_VGA,
-    .jpeg_quality = 25, //0-63 lower numbers are higher quality
+    .jpeg_quality = 35, //0-63 lower numbers are higher quality
     .fb_count = 3       // if more than one i2s runs in continous mode.  Use only with jpeg
 };
