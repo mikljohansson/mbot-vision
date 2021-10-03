@@ -2,24 +2,26 @@
 #include <WebServer.h>
 #include "httpd.h"
 #include "camera.h"
+#include "framerate.h"
 #include "wiring.h"
 
 WebServer server(80);
+static TaskHandle_t httpdTask;
 
 class JpegStream {
     private:
         WiFiClient _client;
         TaskHandle_t _task;
+        Framerate _framerate;
 
     public:
-        JpegStream(const WiFiClient &client) {
-            _client = client;
-        }
+        JpegStream(const WiFiClient &client)
+         : _client(client), _framerate("HTTP stream framerate: %02f\n") {}
 
         void start() {
             Serial.print("HTTP stream connected: ");
             Serial.println(_client.remoteIP());
-            xTaskCreatePinnedToCore(runStatic, "jpegStream", 10000, this, 2, &_task, 1);
+            xTaskCreatePinnedToCore(runStatic, "jpegStream", 10000, this, 1, &_task, 1);
         }
 
     private:
@@ -35,6 +37,7 @@ class JpegStream {
 
         void run() {
             send("HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=gc0p4Jq0M2Yt08jU534c0p\r\n");
+            _framerate.init();
 
             while (true) {
                 camera_fb_t *fb = fbqueue->take();
@@ -59,6 +62,7 @@ class JpegStream {
                     }
 
                     fbqueue->release(fb);
+                    _framerate.tick();
                 }
 
                 if (!_client.connected()) {
@@ -66,8 +70,6 @@ class JpegStream {
                     Serial.println(_client.remoteIP());
                     break;
                 }
-
-                yield();
             }
         }
 
@@ -90,16 +92,24 @@ void handleFlash();
 void handleJpegStream();
 void handleNotFound();
 
-void httpdInit() {
+void httpdServiceRequests(void *p) {
     server.on("/", HTTP_GET, handleIndex);
     server.on("/flash", HTTP_POST, handleFlash);
     server.on("/stream", HTTP_GET, handleJpegStream);
     server.onNotFound(handleNotFound);
     server.begin();
+
+    while (true) {
+        // Service HTTP requests
+        server.handleClient();
+        yield();
+    }
+
+    vTaskDelete(NULL);
 }
 
-void httpdLoop() {
-    server.handleClient();
+void httpdRun() { 
+    xTaskCreatePinnedToCore(httpdServiceRequests, "httpd", 10000, NULL, 1, &httpdTask, 1);
 }
 
 String indexDocument = R"doc(<html>

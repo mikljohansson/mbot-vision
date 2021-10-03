@@ -57,7 +57,7 @@ class FrameBufferQueue {
         camera_fb_t *take() {
             camera_fb_t *result = 0;
 
-            if (xSemaphoreTake(signal, portTICK_PERIOD_MS * 100) && xSemaphoreTake(lock, portMAX_DELAY)) {
+            if (xSemaphoreTake(signal, portTICK_PERIOD_MS * 1000) && xSemaphoreTake(lock, portMAX_DELAY)) {
                 if (!queue.empty()) {
                     FrameBufferItem &item = queue.at(queue.size() - 1);
                     result = item.fb;
@@ -81,7 +81,12 @@ class FrameBufferQueue {
                     for (Queue::iterator it = queue.begin(); it != queue.end(); ++it) {
                         if (it->fb == fb) {
                             it->readers--;
-                            expire();
+                            
+                            if (it->readers == 0) {
+                                esp_camera_fb_return(it->fb);
+                                queue.erase(it);
+                            }
+
                             break;
                         }
                     }

@@ -1,15 +1,11 @@
 #include <Arduino.h>
 #include "camera.h"
+#include "framerate.h"
 #include "common.h"
 
 FrameBufferQueue *fbqueue;
-TaskHandle_t cameraCaptureFrameTask;
-
-// Framerate calculation
-double windowTime = 0.0;
-unsigned long windowFrames = 0;
-unsigned long lastUpdatedWindow;
-unsigned long lastShowedFramerate = 0;
+static TaskHandle_t cameraTask;
+static Framerate framerate("Camera framerate: %02f\n");
 
 void cameraCaptureFrame(void *p) {
     // Initialize camera
@@ -24,30 +20,14 @@ void cameraCaptureFrame(void *p) {
         delay(250);
     }
 
-    lastUpdatedWindow = millis();
+    framerate.init();
 
     while (true) {
         camera_fb_t *fb = esp_camera_fb_get();
 
         if (fb) {
             fbqueue->push(fb);
-
-            // Calculate the framerate
-            while (windowFrames >= 10.0) {
-                windowTime -= (windowTime / (double)windowFrames);
-                windowFrames--;
-            }
-
-            unsigned long ts = millis();
-            windowTime += (ts - lastUpdatedWindow);
-            windowFrames++;
-            lastUpdatedWindow = ts;
-
-            // Display the framerate
-            if (ts - lastShowedFramerate > 5000) {
-                serialPrint("Framerate: %02f\n", (double)windowFrames / (windowTime / 1000.0));
-                lastShowedFramerate = ts;
-            }
+            framerate.tick();
         }
 
         yield();
@@ -58,7 +38,7 @@ void cameraCaptureFrame(void *p) {
 
 void cameraRun() {
     fbqueue = new FrameBufferQueue();
-    xTaskCreatePinnedToCore(cameraCaptureFrame, "captureFrame", 10000, NULL, 1, &cameraCaptureFrameTask, 0);
+    xTaskCreatePinnedToCore(cameraCaptureFrame, "camera", 10000, NULL, 1, &cameraTask, 0);
 }
 
 // https://github.com/geeksville/Micro-RTSP/blob/master/src/OV2640.cpp
@@ -94,5 +74,5 @@ camera_config_t mv_camera_aithinker_config {
     //.frame_size = FRAMESIZE_QVGA,
     .frame_size = FRAMESIZE_VGA,
     .jpeg_quality = 25, //0-63 lower numbers are higher quality
-    .fb_count = 2       // if more than one i2s runs in continous mode.  Use only with jpeg
+    .fb_count = 3       // if more than one i2s runs in continous mode.  Use only with jpeg
 };

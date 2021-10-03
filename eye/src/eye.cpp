@@ -88,12 +88,6 @@ void setup() {
     delay(500);
     Serial.println(ret ? "Internet gateway was reachable" : "Not able to reach internet gateway");
 
-    // Start the camera frame capture task
-    cameraRun();
-
-    // Start webserver
-    httpdInit();
-
     // Connect to Mbot
     //oledPrint("Connecting to MBot");
     //Serial1.setDebugOutput(true);
@@ -102,6 +96,12 @@ void setup() {
 
     oledPrint("%s %s", WiFi.getHostname(), ip.toString().c_str());
 
+    // Start the camera frame capture task
+    cameraRun();
+
+    // Start webserver
+    httpdRun();
+
     digitalWrite(MV_LED_PIN, HIGH);
     Serial.println("Setup complete");
 
@@ -109,7 +109,5 @@ void setup() {
 }
 
 void loop() {
-    // Service HTTP requests
-    httpdLoop();
-    yield();
+    delay(1000);
 }
