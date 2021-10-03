@@ -1,10 +1,92 @@
 #include <Arduino.h>
 #include <WebServer.h>
 #include "httpd.h"
+#include "camera.h"
 #include "wiring.h"
 
 WebServer server(80);
-std::vector<WiFiClient *> streams;
+
+class JpegStream {
+    private:
+        WiFiClient _client;
+        TaskHandle_t _task;
+
+    public:
+        JpegStream(const WiFiClient &client) {
+            _client = client;
+        }
+
+        void start() {
+            Serial.print("HTTP stream connected: ");
+            Serial.println(_client.remoteIP());
+            xTaskCreatePinnedToCore(runStatic, "jpegStream", 10000, this, 2, &_task, 1);
+        }
+
+    private:
+        void send(const void *data, size_t len) {
+            size_t written = 0;
+
+            while (data && _client.connected() && written < len) {
+                written += _client.write(((const uint8_t *)data) + written, len);
+                yield();
+            }
+        }
+
+        void send(const char *data) {
+            send(data, strlen(data));
+        }
+
+        void run() {
+            send("HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=gc0p4Jq0M2Yt08jU534c0p\r\n");
+
+            while (true) {
+                camera_fb_t *fb = fbqueue->take();
+
+                if (fb) {
+                    String headers = "\r\n--gc0p4Jq0M2Yt08jU534c0p\r\nContent-Type: image/jpeg\r\n";
+
+                    if (fb->format == PIXFORMAT_JPEG) {
+                        headers += "Content-Length: ";
+                        headers += fb->len;
+                        headers += "\r\n";
+                    }
+
+                    headers += "\r\n";
+                    send(headers.c_str(), headers.length());
+
+                    if (fb->format == PIXFORMAT_JPEG) {
+                        send(fb->buf, fb->len);
+                    }
+                    else if (!frame2jpg_cb(fb, 25, sendStatic, this)) {
+                        Serial.println("Failed to convert framebuffer to jpeg");
+                    }
+
+                    fbqueue->release(fb);
+                }
+
+                if (!_client.connected()) {
+                    Serial.print("HTTP stream disconnected: ");
+                    Serial.println(_client.remoteIP());
+                    break;
+                }
+
+                yield();
+            }
+        }
+
+        static void runStatic(void *p) {
+            JpegStream *stream = (JpegStream *)p;
+            stream->run();
+            delete stream;
+            vTaskDelete(NULL);
+        }
+
+        static size_t sendStatic(void *p, size_t index, const void *data, size_t len) {
+            JpegStream *stream = (JpegStream *)p;
+            stream->send(data, len);
+            return len;
+        }
+};
 
 void handleIndex();
 void handleFlash();
@@ -21,65 +103,6 @@ void httpdInit() {
 
 void httpdLoop() {
     server.handleClient();
-}
-
-void send(WiFiClient *client, const void *data, size_t len) {
-    size_t written = 0;
-
-    while (data && client->connected() && written < len) {
-        written += client->write(((const uint8_t *)data) + written, len);
-        yield();
-    }
-}
-
-void send(WiFiClient *client, const char *data) {
-    send(client, data, strlen(data));
-}
-
-size_t httpdWriteStream(void *arg, size_t index, const void *data, size_t len) {
-    for (int i = 0; i < streams.size(); i++) {
-        WiFiClient *client = streams[i];
-        send(client, data, len);
-    }
-
-    return len;
-}
-
-size_t httpdStreamCount() {
-    return streams.size();
-}
-
-void httpdSendStream(camera_fb_t *fb) {
-    String headers = "\r\n--gc0p4Jq0M2Yt08jU534c0p\r\nContent-Type: image/jpeg\r\n";
-
-    if (fb->format == PIXFORMAT_JPEG) {
-        headers += "Content-Length: ";
-        headers += fb->len;
-        headers += "\r\n";
-    }
-
-    headers += "\r\n";
-    httpdWriteStream(0, 0, headers.c_str(), headers.length());
-
-    if (fb->format == PIXFORMAT_JPEG) {
-        httpdWriteStream(0, 0, fb->buf, fb->len);
-    }
-    else if (!frame2jpg_cb(fb, 25, httpdWriteStream, 0)) {
-        Serial.println("Failed to convert framebuffer to jpeg");
-    }
-
-    for (int i = 0; i < streams.size(); ) {
-        WiFiClient *client = streams[i];
-        if (client->connected()) {
-            i++;
-        }
-        else {
-            Serial.print("HTTP stream disconnected: ");
-            Serial.println(client->remoteIP());
-            streams.erase(streams.begin() + i);
-            delete client;
-        }
-    }
 }
 
 String indexDocument = R"doc(<html>
@@ -171,21 +194,13 @@ void handleFlash() {
 
     Serial.println("Turning flash to value " + value);
     ledcWrite(MV_FLASH_CHAN, duty);
-    
-    Serial.print("Setting flash to: ");
-    Serial.println(value);
 
     server.send(200, "text/plain", "OK");
 }
 
 void handleJpegStream() {
-    WiFiClient *client = new WiFiClient();
-    *client = server.client();
-    send(client, "HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=gc0p4Jq0M2Yt08jU534c0p\r\n");
-    streams.push_back(client);
-
-    Serial.print("HTTP stream connected: ");
-    Serial.println(client->remoteIP());
+    JpegStream *stream = new JpegStream(server.client());
+    stream->start();
 }
 
 void handleNotFound() {

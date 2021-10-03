@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <Wire.h>
-#include <Adafruit_SSD1306.h>
 #include <WiFi.h>
 #include <WiFiMulti.h>
 #include <WiFiClient.h>
@@ -27,12 +26,6 @@ const char *hostname = "mbot";
 
 Adafruit_SSD1306 oled(128, 32);
 WiFiMulti wifiMulti;
-
-// Framerate calculation
-double windowTime;
-unsigned long windowFrames;
-unsigned long lastUpdatedWindow;
-unsigned long lastShowedFramerate = 0;
 
 template <typename... T>
 void oledPrint(const char *message, T... args);
@@ -95,17 +88,8 @@ void setup() {
     delay(500);
     Serial.println(ret ? "Internet gateway was reachable" : "Not able to reach internet gateway");
 
-    // Initialize camera
-    oledPrint("Init camera");
-    while (true) {
-        esp_err_t err = esp_camera_init(&mv_camera_aithinker_config);
-        if (err == ESP_OK) {
-            break;
-        }
-
-        oledPrint("Camera probe failed with error 0x%x", err);
-        delay(250);
-    }
+    // Start the camera frame capture task
+    cameraRun();
 
     // Start webserver
     httpdInit();
@@ -124,58 +108,8 @@ void setup() {
     ledcWrite(MV_FLASH_CHAN, 0);
 }
 
-void detect(camera_fb_t *fb) {
-
-}
-
 void loop() {
     // Service HTTP requests
     httpdLoop();
-
-    if (httpdStreamCount() > 0) {
-        // Send a frame from the camera
-        camera_fb_t *fb = esp_camera_fb_get();
-        //detect(fb);
-        httpdSendStream(fb);
-        esp_camera_fb_return(fb);
-
-        // Calculate the framerate
-        while (windowFrames >= 10.0) {
-            windowTime -= (windowTime / (double)windowFrames);
-            windowFrames--;
-        }
-
-        unsigned long ts = millis();
-        windowTime += (ts - lastUpdatedWindow);
-        windowFrames++;
-        lastUpdatedWindow = ts;
-
-        // Display the framerate
-        if (ts - lastShowedFramerate > 5000) {
-            serialPrint("Framerate: %02f\n", (double)windowFrames / (windowTime / 1000.0));
-            lastShowedFramerate = ts;
-        }
-    }
-    else {
-        windowTime = 1;
-        windowFrames = 0;
-        lastUpdatedWindow = millis();
-    }
-
     yield();
-}
-
-template <typename... T>
-void oledPrint(const char *message, T... args) {
-    oled.clearDisplay();
-    oled.setCursor(0, 0);
-    
-    int len = snprintf(NULL, 0, message, args...);
-    if (len) {
-        char buf[len];
-        sprintf(buf, message, args...);
-        oled.print(buf);
-    }
-    
-    oled.display();
 }

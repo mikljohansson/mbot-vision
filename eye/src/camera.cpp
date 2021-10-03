@@ -1,4 +1,63 @@
+#include <Arduino.h>
 #include "camera.h"
+#include "common.h"
+
+FrameBufferQueue *fbqueue;
+TaskHandle_t cameraCaptureFrameTask;
+
+// Framerate calculation
+double windowTime = 0.0;
+unsigned long windowFrames = 0;
+unsigned long lastUpdatedWindow;
+unsigned long lastShowedFramerate = 0;
+
+void cameraCaptureFrame(void *p) {
+    // Initialize camera
+    Serial.println("Init camera");
+    while (true) {
+        esp_err_t err = esp_camera_init(&mv_camera_aithinker_config);
+        if (err == ESP_OK) {
+            break;
+        }
+
+        serialPrint("Camera probe failed with error 0x%x", err);
+        delay(250);
+    }
+
+    while (true) {
+        camera_fb_t *fb = esp_camera_fb_get();
+
+        if (fb) {
+            fbqueue->push(fb);
+
+            // Calculate the framerate
+            while (windowFrames >= 10.0) {
+                windowTime -= (windowTime / (double)windowFrames);
+                windowFrames--;
+            }
+
+            unsigned long ts = millis();
+            windowTime += (ts - lastUpdatedWindow);
+            windowFrames++;
+            lastUpdatedWindow = ts;
+
+            // Display the framerate
+            if (ts - lastShowedFramerate > 5000) {
+                serialPrint("Framerate: %02f\n", (double)windowFrames / (windowTime / 1000.0));
+                lastShowedFramerate = ts;
+            }
+        }
+
+        yield();
+    }
+
+    vTaskDelete(NULL);
+}
+
+void cameraRun() {
+    fbqueue = new FrameBufferQueue();
+    xTaskCreatePinnedToCore(cameraCaptureFrame, "captureFrame", 10000, NULL, 1, &cameraCaptureFrameTask, 0);
+}
 
 // https://github.com/geeksville/Micro-RTSP/blob/master/src/OV2640.cpp
 camera_config_t mv_camera_aithinker_config {
@@ -32,6 +91,6 @@ camera_config_t mv_camera_aithinker_config {
     // .frame_size = FRAMESIZE_XGA, // needs 96K or even smaller FRAMESIZE_SVGA - can work if using only 1 fb
     //.frame_size = FRAMESIZE_QVGA,
     .frame_size = FRAMESIZE_VGA,
-    .jpeg_quality = 63, //0-63 lower numbers are higher quality
-    .fb_count = 2       // if more than one i2s runs in continous mode.  Use only with jpeg
+    .jpeg_quality = 25, //0-63 lower numbers are higher quality
+    .fb_count = 3       // if more than one i2s runs in continous mode.  Use only with jpeg
 };
