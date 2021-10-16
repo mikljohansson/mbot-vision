@@ -3,10 +3,12 @@
 #include "httpd.h"
 #include "camera.h"
 #include "framerate.h"
+#include "blobdetector.h"
 #include "wiring.h"
 
-WebServer server(80);
+static WebServer server(80);
 static TaskHandle_t httpdTask;
+static BlobDetector *detector;
 
 class JpegStream {
     private:
@@ -21,7 +23,7 @@ class JpegStream {
         void start() {
             Serial.print("Stream connected: ");
             Serial.println(_client.remoteIP());
-            xTaskCreatePinnedToCore(runStatic, "jpegStream", 10000, this, 1, &_task, 1);
+            xTaskCreatePinnedToCore(runStatic, "jpegStream", 10000, this, 3, &_task, 1);
         }
 
     private:
@@ -87,15 +89,74 @@ class JpegStream {
         }
 };
 
+class EventStream {
+    private:
+        WiFiClient _client;
+        TaskHandle_t _task;
+        Framerate _framerate;
+
+    public:
+        EventStream(const WiFiClient &client)
+         : _client(client), _framerate("Event stream framerate: %02f\n") {}
+
+        void start() {
+            Serial.print("Event stream connected: ");
+            Serial.println(_client.remoteIP());
+            xTaskCreatePinnedToCore(runStatic, "eventStream", 10000, this, 2, &_task, 1);
+        }
+
+    private:
+        void send(const void *data, size_t len) {
+            for (size_t written = 0; data && _client.connected() && written < len; yield()) {
+                written += _client.write(((const uint8_t *)data) + written, len - written);
+            }
+        }
+
+        void send(const char *data) {
+            send(data, strlen(data));
+        }
+
+        void run() {
+            send("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n");
+            _framerate.init();
+
+            while (true) {
+                DetectedBlob blob = detector->get();
+                
+                String data = "data: ";
+                blob.serialize(data);
+                data += "\r\n\r\n";
+                send(data.c_str(), data.length());
+
+                _framerate.tick();
+
+                if (!_client.connected()) {
+                    Serial.print("HTTP event stream disconnected: ");
+                    Serial.println(_client.remoteIP());
+                    break;
+                }
+            }
+        }
+
+        static void runStatic(void *p) {
+            EventStream *stream = (EventStream *)p;
+            stream->run();
+            delete stream;
+            vTaskDelete(NULL);
+        }
+};
+
 void handleIndex();
 void handleFlash();
 void handleJpegStream();
+void handleEventStream();
 void handleNotFound();
 
 void httpdServiceRequests(void *p) {
     server.on("/", HTTP_GET, handleIndex);
     server.on("/flash", HTTP_POST, handleFlash);
     server.on("/stream", HTTP_GET, handleJpegStream);
+    server.on("/events", HTTP_GET, handleEventStream);
     server.onNotFound(handleNotFound);
     server.begin();
 
@@ -108,8 +169,9 @@ void httpdServiceRequests(void *p) {
     vTaskDelete(NULL);
 }
 
-void httpdRun() { 
-    xTaskCreatePinnedToCore(httpdServiceRequests, "httpd", 10000, NULL, 1, &httpdTask, 1);
+void httpdRun(BlobDetector &d) {
+    detector = &d;
+    xTaskCreatePinnedToCore(httpdServiceRequests, "httpd", 10000, NULL, 0, &httpdTask, 1);
 }
 
 String indexDocument = R"doc(<html>
@@ -143,6 +205,11 @@ String indexDocument = R"doc(<html>
         const handleFlash = debounce((value) => {
             post(`/flash?v=${value}`);
         });
+
+        const source = new EventSource('/events');
+        source.onmessage = (e) => {
+            console.log(e.data);
+        };
     </script>
     <style>
       .body {
@@ -207,6 +274,11 @@ void handleFlash() {
 
 void handleJpegStream() {
     JpegStream *stream = new JpegStream(server.client());
+    stream->start();
+}
+
+void handleEventStream() {
+    EventStream *stream = new EventStream(server.client());
     stream->start();
 }
 

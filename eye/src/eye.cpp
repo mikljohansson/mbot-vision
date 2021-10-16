@@ -18,17 +18,17 @@ typedef struct _WifiNetwork {
     const char *password;
 } WifiNetwork;
 
-WifiNetwork wifiNetworks[] = {
+static WifiNetwork wifiNetworks[] = {
     {"krokodil", "mistress"},
     {"dlink-BF60", "ptfmm78341"},
 };
 
-const char *hostname = "mbot";
+static const char *hostname = "mbot";
 
 Adafruit_SSD1306 oled(128, 32);
-WiFiMulti wifiMulti;
+static WiFiMulti wifiMulti;
 
-BlobDetector detector({255, 0, 0});
+static BlobDetector blobDetector({255, 0, 0});
 
 void setup() {
     pinMode(MV_LED_PIN, OUTPUT);
@@ -99,11 +99,11 @@ void setup() {
     // Start the camera frame capture task
     cameraRun();
 
-    // Start webserver
-    httpdRun();
-
     // Start color detector
-    detector.start();
+    blobDetector.start();
+
+    // Start webserver
+    httpdRun(blobDetector);
 
     digitalWrite(MV_LED_PIN, HIGH);
     Serial.println("Setup complete");

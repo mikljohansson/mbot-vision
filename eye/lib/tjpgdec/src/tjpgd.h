@@ -44,12 +44,13 @@ typedef enum {
 
 
 /* Rectangular region in the output image */
-typedef struct {
+typedef struct JRECT JRECT;
+struct JRECT {
 	uint16_t left;		/* Left end */
 	uint16_t right;		/* Right end */
 	uint16_t top;		/* Top end */
 	uint16_t bottom;	/* Bottom end */
-} JRECT;
+};
 
 
 
