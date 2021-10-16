@@ -5,19 +5,15 @@
 #include "framerate.h"
 #include "colorspace.h"
 
-#define HUE_THRESHOLD           25
-#define SATURATION_THRESHOLD    150
-
 struct DetectedBlob {
     float x, y;
-    float width, height;
 
     void serialize(String &out);
 };
 
 class BlobDetector {
     private:
-        HsvColor _color;
+        RgbColor _color;
         TaskHandle_t _task;
         Framerate _framerate;
         DetectedBlob _detected;

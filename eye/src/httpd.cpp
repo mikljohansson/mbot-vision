@@ -208,7 +208,12 @@ String indexDocument = R"doc(<html>
 
         const source = new EventSource('/events');
         source.onmessage = (e) => {
-            console.log(e.data);
+            const crosshair = document.getElementById("crosshair");
+            const blob = JSON.parse(e.data);
+            const rect = crosshair.parentElement.getBoundingClientRect();
+            crosshair.style.left = Math.round(rect.width * blob.x) + "px";
+            crosshair.style.top = Math.round(rect.height * blob.y) + "px";
+
         };
     </script>
     <style>
@@ -219,6 +224,8 @@ String indexDocument = R"doc(<html>
       }
 
       .container {
+        display: inline-block;
+        position: relative;
         width: 100%;
         height: 100%;
         max-width: 320px;
@@ -228,6 +235,13 @@ String indexDocument = R"doc(<html>
         background-repeat: no-repeat;
         background-size: contain;
         background-position: top center;
+      }
+
+      #crosshair {
+        position: absolute;
+        color: white;
+        font-size: 200%;
+        transform: translate(-50%, -50%);
       }
 
       .container td {
@@ -244,10 +258,13 @@ String indexDocument = R"doc(<html>
     </style>
   </head>
   <body class="body">
-    <table class="container">
-      <td>&#x1F4A1;</td>
-      <td class="inputcell"><input type="range" min="0" max="175" value="0" id="flash" oninput="handleFlash(this.value);" onchange="handleFlash(this.value);"></td>
-    </table>
+    <div class="container">
+      <div id="crosshair">&#x2316</div>
+      <table>
+        <td>&#x1F4A1;</td>
+        <td class="inputcell"><input type="range" min="0" max="175" value="0" id="flash" oninput="handleFlash(this.value);" onchange="handleFlash(this.value);"></td>
+      </table>
+    </div>
   <body>
 <html>)doc";
 
