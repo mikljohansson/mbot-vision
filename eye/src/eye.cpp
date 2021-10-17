@@ -28,7 +28,7 @@ static const char *hostname = "mbot";
 Adafruit_SSD1306 oled(128, 32);
 static WiFiMulti wifiMulti;
 
-static BlobDetector blobDetector({255, 0, 0});
+static BlobDetector blobDetector({175, 75, 90});
 
 void setup() {
     pinMode(MV_LED_PIN, OUTPUT);

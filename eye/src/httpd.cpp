@@ -36,12 +36,12 @@ void handleFlash() {
 }
 
 void handleJpegStream() {
-    JpegStream *stream = new JpegStream(server.client(), false);
+    JpegStream *stream = new JpegStream(server.client(), false, *detector);
     stream->start();
 }
 
 void handleDetectorStream() {
-    JpegStream *stream = new JpegStream(server.client(), true);
+    JpegStream *stream = new JpegStream(server.client(), true, *detector);
     stream->start();
 }
 
@@ -74,7 +74,6 @@ void httpdServiceRequests(void *p) {
     while (true) {
         // Service HTTP requests
         server.handleClient();
-        yield();
     }
 
     vTaskDelete(NULL);
@@ -82,5 +81,5 @@ void httpdServiceRequests(void *p) {
 
 void httpdRun(BlobDetector &d) {
     detector = &d;
-    xTaskCreatePinnedToCore(httpdServiceRequests, "httpd", 10000, NULL, 0, &httpdTask, 1);
+    xTaskCreatePinnedToCore(httpdServiceRequests, "httpd", 10000, NULL, 2, &httpdTask, 1);
 }

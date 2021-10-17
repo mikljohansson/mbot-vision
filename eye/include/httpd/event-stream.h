@@ -21,7 +21,7 @@ class EventStream {
         void start() {
             Serial.print("Event stream connected: ");
             Serial.println(_client.remoteIP());
-            xTaskCreatePinnedToCore(runStatic, "eventStream", 10000, this, 2, &_task, 1);
+            xTaskCreatePinnedToCore(runStatic, "eventStream", 10000, this, 3, &_task, 1);
         }
 
     private:
@@ -36,6 +36,8 @@ class EventStream {
         }
 
         void run() {
+            Serial.println("Starting event stream");
+            
             send("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n");
             _framerate.init();
 
@@ -50,8 +52,7 @@ class EventStream {
                 _framerate.tick();
 
                 if (!_client.connected()) {
-                    Serial.print("HTTP event stream disconnected: ");
-                    Serial.println(_client.remoteIP());
+                    Serial.print("HTTP event stream disconnected");
                     break;
                 }
             }

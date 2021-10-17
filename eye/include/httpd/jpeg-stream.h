@@ -7,6 +7,7 @@
 #include "camera.h"
 #include "framerate.h"
 #include "jpeg.h"
+#include "blobdetector.h"
 
 class JpegStream {
     private:
@@ -14,15 +15,16 @@ class JpegStream {
         TaskHandle_t _task;
         Framerate _framerate;
         bool _showDetector;
+        BlobDetector &_detector;
 
     public:
-        JpegStream(const WiFiClient &client, bool showDetector)
-         : _client(client), _framerate("Stream framerate: %02f\n"), _showDetector(showDetector) {}
+        JpegStream(const WiFiClient &client, bool showDetector, BlobDetector &detector)
+         : _client(client), _framerate("Stream framerate: %02f\n"), _showDetector(showDetector), _detector(detector) {}
 
         void start() {
             Serial.print("Stream connected: ");
             Serial.println(_client.remoteIP());
-            xTaskCreatePinnedToCore(runStatic, "jpegStream", 10000, this, 3, &_task, 1);
+            xTaskCreatePinnedToCore(runStatic, "jpegStream", 10000, this, 2, &_task, 1);
         }
 
     private:
@@ -37,6 +39,9 @@ class JpegStream {
         }
 
         void run() {
+            Serial.println("Starting mjpeg stream");
+            JpegDecoder *decoder = 0;
+
             send("HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=gc0p4Jq0M2Yt08jU534c0p\r\n");
             _framerate.init();
 
@@ -57,23 +62,20 @@ class JpegStream {
 
                     if (fb->format == PIXFORMAT_JPEG) {
                         if (_showDetector) {
-                            JpegDecoder decoder;
-                            decoder.decompress(fb->buf, fb->len);
-                            size_t framelen = decoder.getOutputWidth() * decoder.getOutputHeight() * 3;
-                            
-                            // Convert to HSV and back to RGB
-                            for (uint8_t *pixel = decoder.getOutputFrame(), *last = pixel + framelen; pixel < last; pixel += 3) {
-                                RgbColor rgb = HsvToRgb(RgbToHsv({pixel[0], pixel[1], pixel[2]}));
-                                pixel[0] = rgb.r;
-                                pixel[1] = rgb.g;
-                                pixel[2] = rgb.b;
+                            if (!decoder) {
+                                decoder = new JpegDecoder();
                             }
 
-                            // Encode to JPEG and send
-                            if (!fmt2jpg_cb(
-                                    decoder.getOutputFrame(), framelen, decoder.getOutputWidth(), decoder.getOutputHeight(), 
-                                    PIXFORMAT_RGB888, 40, sendStatic, this)) {
-                                Serial.println("Failed to convert framebuffer to jpeg");
+                            if (decoder->decompress(fb->buf, fb->len)) {
+                                size_t framelen = decoder->getOutputWidth() * decoder->getOutputHeight() * 3;
+                                _detector.debug(decoder->getOutputFrame(), decoder->getOutputWidth(), decoder->getOutputHeight());
+                                
+                                // Encode to JPEG and send
+                                if (!fmt2jpg_cb(
+                                        decoder->getOutputFrame(), framelen, decoder->getOutputWidth(), decoder->getOutputHeight(), 
+                                        PIXFORMAT_RGB888, 40, sendStatic, this)) {
+                                    Serial.println("Failed to convert framebuffer to jpeg");
+                                }
                             }
                         }
                         else {
@@ -89,11 +91,12 @@ class JpegStream {
                 }
 
                 if (!_client.connected()) {
-                    Serial.print("HTTP stream disconnected: ");
-                    Serial.println(_client.remoteIP());
+                    Serial.print("HTTP stream disconnected");
                     break;
                 }
             }
+
+            delete decoder;
         }
 
         static void runStatic(void *p) {

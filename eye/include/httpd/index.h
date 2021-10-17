@@ -35,14 +35,37 @@ String indexDocument = R"doc(<html>
             post(`/flash?v=${value}`);
         });
 
-        const source = new EventSource('/events');
-        source.onmessage = (e) => {
-            const crosshair = document.getElementById("crosshair");
-            const blob = JSON.parse(e.data);
-            const rect = crosshair.parentElement.getBoundingClientRect();
-            crosshair.style.left = Math.round(rect.width * blob.x) + "px";
-            crosshair.style.top = Math.round(rect.height * blob.y) + "px";
+        const handleFlashToggle = () => {
+          const flash = document.getElementById("flash");
+          flash.value = flash.value > 0 ? 0 : 125;
+        };
 
+        let source = null;
+        
+        const connectEvents = () => {
+          source = new EventSource('/events');
+          source.onmessage = (e) => {
+              const crosshair = document.getElementById("crosshair");
+              const blob = JSON.parse(e.data);
+              const rect = crosshair.parentElement.getBoundingClientRect();
+              crosshair.style.left = Math.round(rect.width * blob.x) + "px";
+              crosshair.style.top = Math.round(rect.height * blob.y) + "px";
+          };
+        }
+
+        const handleDebug = () => {
+          const container = document.getElementById("container");
+          
+          // Need to call stop() to stop loading the MJPEG stream, and need to reconnect the crosshair event stream
+          window.stop();
+          source.close();
+
+          connectEvents();
+          container.style.backgroundImage = container.style.backgroundImage.includes("detector") ? "url('/stream')" : "url('/detector')";
+        };
+
+        const handleLoad = () => {
+          connectEvents();
         };
     </script>
     <style>
@@ -52,7 +75,7 @@ String indexDocument = R"doc(<html>
         justify-content: center;
       }
 
-      .container {
+      #container {
         display: inline-block;
         position: relative;
         width: 100%;
@@ -60,7 +83,7 @@ String indexDocument = R"doc(<html>
         max-width: 640px;
         max-height: 480px;
         padding: 5px;
-        background-image: url("/stream");
+        background-image: url('/stream');
         background-repeat: no-repeat;
         background-size: contain;
         background-position: top center;
@@ -81,19 +104,26 @@ String indexDocument = R"doc(<html>
         width: 99%;
       }
 
-      .container input {
+      .inputcell input {
         width: 100%;
+      }
+
+      .button {
+        cursor: pointer;
+        font-size: 150%;
       }
     </style>
   </head>
-  <body class="body">
-    <div class="container">
+  <body class="body" onLoad="handleLoad();">
+    <div id="container">
       <div id="crosshair">&#x2316</div>
       <table>
-        <td>&#x1F4A1;</td>
+        <td class="button" onClick="javascript:handleFlashToggle();">&#x1F4A1;</td>
         <td class="inputcell"><input type="range" min="0" max="175" value="0" id="flash" oninput="handleFlash(this.value);" onchange="handleFlash(this.value);"></td>
+        <td class="button" style="color: #999;" onClick="javascript:handleDebug();">&#x267B;</td>
       </table>
     </div>
+    <div class="container detector" />
   <body>
 <html>)doc";
 

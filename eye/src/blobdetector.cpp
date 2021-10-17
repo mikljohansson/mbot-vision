@@ -3,9 +3,9 @@
 #include "jpeg.h"
 #include "colorspace.h"
 
-#define HUE_THRESHOLD           60
-#define SATURATION_THRESHOLD    192
-#define LUMINOSITY_THRESHOLD    192
+#define HUE_THRESHOLD           16
+#define SATURATION_THRESHOLD    64
+#define LUMINOSITY_THRESHOLD    128
 
 static inline bool isColorMatch(const HsvColor &color, const uint8_t *pixel) {
     HsvColor hsv = RgbToHsv({pixel[0], pixel[1], pixel[2]});
@@ -57,6 +57,40 @@ DetectedBlob BlobDetector::get() {
 
     DetectedBlob detected = _detected;
     return detected;
+}
+
+void BlobDetector::debug(uint8_t *pixels, size_t width, size_t height) {
+    size_t framelen = width * height * 3;
+    HsvColor hsv = RgbToHsv(_color);
+    
+    /*
+    Serial.print("Top pix ");
+    printPixel(pixels[0], pixels[1], pixels[2]);
+    */
+
+    int i = 0;
+    for (uint8_t *pixel = pixels, *last = pixel + framelen; pixel < last; pixel += 3) {
+        if (isColorMatch(hsv, pixel)) {
+            pixel[0] = 255;
+            pixel[1] = 255;
+            pixel[2] = 255;
+        }
+        else {
+            //std::swap(pixel[0], pixel[2]);
+
+            // Convert to HSV and back
+            RgbColor rgb = HsvToRgb(RgbToHsv({pixel[0], pixel[1], pixel[2]}));
+
+            // Something seems to flip the red and blue channels
+            pixel[0] = rgb.b;
+            pixel[1] = rgb.g;
+            pixel[2] = rgb.r;
+        }
+
+        if (i++ % width == 0) {
+            yield();
+        }
+    }
 }
 
 void BlobDetector::run() {
@@ -123,9 +157,11 @@ void BlobDetector::run() {
             }
 
             if (maxx && maxy) {
+                /*
                 Serial.print("Found color ");
                 const uint8_t *pixel = pixels + (maxy * width + maxx) * 3;
                 printPixel(pixel[0], pixel[1], pixel[2]);
+                */
 
                 _detected = {(float)maxx / width, (float)maxy / height};
                 xSemaphoreGive(_signal);
