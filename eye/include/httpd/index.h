@@ -50,6 +50,7 @@ String indexDocument = R"doc(<html>
               const rect = crosshair.parentElement.getBoundingClientRect();
               crosshair.style.left = Math.round(rect.width * blob.x) + "px";
               crosshair.style.top = Math.round(rect.height * blob.y) + "px";
+              crosshair.style.display = blob.detected ? "inline" : "none";
           };
         }
 

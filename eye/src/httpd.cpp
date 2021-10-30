@@ -29,7 +29,7 @@ void handleFlash() {
         duty = 0;
     }
 
-    Serial.println("Turning flash to value " + value);
+    Serial.println("Turning flash to value " + duty);
     ledcWrite(MV_FLASH_CHAN, duty);
 
     server.send(200, "text/plain", "OK");

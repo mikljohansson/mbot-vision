@@ -3,6 +3,7 @@
 #include <esp_camera.h>
 #include "framerate.h"
 #include "common.h"
+#include "wiring.h"
 
 FrameBufferQueue *fbqueue;
 static TaskHandle_t cameraTask;
@@ -32,8 +33,8 @@ camera_config_t mv_camera_aithinker_config {
     .pin_href = 23,
     .pin_pclk = 22,
     .xclk_freq_hz = 20000000,
-    .ledc_timer = LEDC_TIMER_1,
-    .ledc_channel = LEDC_CHANNEL_1,
+    .ledc_timer = MV_CAM_TIMER,
+    .ledc_channel = MV_CAM_CHAN,
     .pixel_format = PIXFORMAT_JPEG,
     // .frame_size = FRAMESIZE_UXGA, // needs 234K of framebuffer space
     // .frame_size = FRAMESIZE_SXGA, // needs 160K for framebuffer

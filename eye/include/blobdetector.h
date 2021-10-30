@@ -7,6 +7,7 @@
 
 struct DetectedBlob {
     float x, y;
+    bool detected;
 
     void serialize(String &out);
 };
@@ -24,6 +25,7 @@ class BlobDetector {
         ~BlobDetector();
 
         void start();
+        DetectedBlob wait();
         DetectedBlob get();
         void debug(uint8_t *pixels, size_t width, size_t height);
 

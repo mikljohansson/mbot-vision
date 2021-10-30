@@ -36,11 +36,13 @@ void DetectedBlob::serialize(String &out) {
     out += x;
     out += ",\"y\":";
     out += y;
+    out += ",\"detected\":";
+    out += detected;
     out += "}";
 }
 
 BlobDetector::BlobDetector(RgbColor color)
- : _color(color), _framerate("Blob detector framerate: %02f\n") {
+ : _color(color), _framerate("Blob detector framerate: %02f\n"), _detected({0, 0, false}) {
     _signal = xSemaphoreCreateBinary();
 }
 
@@ -52,11 +54,13 @@ void BlobDetector::start() {
     xTaskCreatePinnedToCore(runStatic, "blobDetector", 10000, this, 1, &_task, 1);
 }
 
-DetectedBlob BlobDetector::get() {
+DetectedBlob BlobDetector::wait() {
     xSemaphoreTake(_signal, portMAX_DELAY);
+    return get();
+}
 
-    DetectedBlob detected = _detected;
-    return detected;
+DetectedBlob BlobDetector::get() {
+    return _detected;
 }
 
 void BlobDetector::debug(uint8_t *pixels, size_t width, size_t height) {
@@ -163,8 +167,11 @@ void BlobDetector::run() {
                 printPixel(pixel[0], pixel[1], pixel[2]);
                 */
 
-                _detected = {(float)maxx / width, (float)maxy / height};
+                _detected = {(float)maxx / width, (float)maxy / height, true};
                 xSemaphoreGive(_signal);
+            }
+            else {
+                _detected = {0, 0, false};
             }
 
             _framerate.tick();

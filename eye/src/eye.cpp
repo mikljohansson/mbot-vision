@@ -11,6 +11,7 @@
 #include "httpd.h"
 #include "wiring.h"
 #include "blobdetector.h"
+#include "mbot-pwm.h"
 #include "common.h"
 
 typedef struct _WifiNetwork {
@@ -29,6 +30,8 @@ Adafruit_SSD1306 oled(128, 32);
 static WiFiMulti wifiMulti;
 
 static BlobDetector blobDetector({175, 75, 90});
+
+static MBotPWM mbot(blobDetector);
 
 void setup() {
     pinMode(MV_LED_PIN, OUTPUT);
@@ -50,6 +53,9 @@ void setup() {
     oled.setTextColor(1);
     oled.setTextSize(1);
     oledPrint("Starting up");
+
+    // Connect to Mbot
+    mbot.start();
 
     // Connect to Wifi
     oledPrint("WiFi connecting");
@@ -87,13 +93,6 @@ void setup() {
     bool ret = Ping.ping(WiFi.gatewayIP(), 1);
     delay(500);
     Serial.println(ret ? "Internet gateway was reachable" : "Not able to reach internet gateway");
-
-    // Connect to Mbot
-    //oledPrint("Connecting to MBot");
-    //Serial1.setDebugOutput(true);
-    //Serial1.begin(115200, SERIAL_8N1, MV_URX_PIN, MV_UTX_PIN);
-    //while (!Serial1);
-
     oledPrint("%s %s", WiFi.getHostname(), ip.toString().c_str());
 
     // Start the camera frame capture task

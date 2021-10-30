@@ -14,6 +14,7 @@ void setup() {
     Serial.begin(115200);
     Serial.println("Starting up");
     Serial2.begin(115200);
+    A15
 }
 
 long tsLast = 0;
@@ -31,6 +32,6 @@ void loop() {
 
     if (millis() - tsLast > 1000) {
         tsLast = millis();
-        Serial2.print("hi from mbot");
+        Serial2.println("hi from mbot");
     }
 }
