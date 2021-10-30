@@ -6,6 +6,8 @@
 #define HUE_THRESHOLD           16
 #define SATURATION_THRESHOLD    64
 #define LUMINOSITY_THRESHOLD    128
+#define MIN_BLOB_WIDTH          3
+#define MIN_BLOB_HEIGHT         2
 
 static inline bool isColorMatch(const HsvColor &color, const uint8_t *pixel) {
     HsvColor hsv = RgbToHsv({pixel[0], pixel[1], pixel[2]});
@@ -132,7 +134,7 @@ void BlobDetector::run() {
                     }
                 }
 
-                if (maxymatches < nmatches) {
+                if (maxymatches < nmatches && nmatches >= MIN_BLOB_WIDTH) {
                     maxymatches = nmatches;
                     maxy = y;
                 }
@@ -152,7 +154,7 @@ void BlobDetector::run() {
                     }
                 }
 
-                if (maxxmatches < nmatches) {
+                if (maxxmatches < nmatches && nmatches >= MIN_BLOB_HEIGHT) {
                     maxxmatches = nmatches;
                     maxx = x;
                 }
