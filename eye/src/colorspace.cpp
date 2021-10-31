@@ -1,98 +1,30 @@
 #include "colorspace.h"
 
-// https://stackoverflow.com/questions/3018313/algorithm-to-convert-rgb-to-hsv-and-hsv-to-rgb-in-range-0-255-for-both
-RgbColor HsvToRgb(HsvColor hsv)
-{
-    RgbColor rgb;
-    int region, p, q, t;
-    int h, s, v, remainder;
-
-    if (hsv.s == 0)
-    {
-        rgb.r = hsv.v;
-        rgb.g = hsv.v;
-        rgb.b = hsv.v;
-        return rgb;
-    }
-
-    // converting to 16 bit to prevent overflow
-    h = hsv.h;
-    s = hsv.s;
-    v = hsv.v;
-
-    region = h / 43;
-    remainder = (h - (region * 43)) * 6; 
-
-    p = (v * (255 - s)) >> 8;
-    q = (v * (255 - ((s * remainder) >> 8))) >> 8;
-    t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
-
-    switch (region)
-    {
-        case 0:
-            rgb.r = v;
-            rgb.g = t;
-            rgb.b = p;
-            break;
-        case 1:
-            rgb.r = q;
-            rgb.g = v;
-            rgb.b = p;
-            break;
-        case 2:
-            rgb.r = p;
-            rgb.g = v;
-            rgb.b = t;
-            break;
-        case 3:
-            rgb.r = p;
-            rgb.g = q;
-            rgb.b = v;
-            break;
-        case 4:
-            rgb.r = t;
-            rgb.g = p;
-            rgb.b = v;
-            break;
-        default:
-            rgb.r = v;
-            rgb.g = p;
-            rgb.b = q;
-            break;
-    }
-
-    return rgb;
+static inline uint8_t fhr(HsvColor hsv, float n) {
+    float k = fmod(n + (float)hsv.h / 255.0f * 360.0f / 60.0f, 6.0f);
+    return hsv.v - (uint8_t)((float)hsv.v * (float)hsv.s / 255.0f * max(min(min(k, 4.0f - k), 1.0f), 0.0f));
 }
 
-HsvColor RgbToHsv(RgbColor rgb)
-{
-    HsvColor hsv;
-    int rgbMin, rgbMax;
+// https://stackoverflow.com/questions/17242144/javascript-convert-hsb-hsv-color-to-rgb-accurately/54024653#54024653
+RgbColor HsvToRgb(HsvColor hsv) {
+    return {fhr(hsv, 5.0f), fhr(hsv, 3.0f), fhr(hsv, 1.0f)};
+}
 
-    rgbMin = min(rgb.r, min(rgb.g, rgb.b));
-    rgbMax = max(rgb.r, max(rgb.g, rgb.b));
+// https://stackoverflow.com/questions/8022885/rgb-to-hsv-color-in-javascript/54070620#54070620
+HsvColor RgbToHsv(RgbColor rgb) {
+    uint8_t v = max(rgb.r, max(rgb.g, rgb.b));
+    float vf = (float)v / 255.0f;
 
-    hsv.v = rgbMax;
-    if (hsv.v == 0)
-    {
-        hsv.h = 0;
-        hsv.s = 0;
-        return hsv;
-    }
+    uint8_t c = v - min(rgb.r, min(rgb.g, rgb.b));
+    float cf = (float)c / 255.0f;
 
-    hsv.s = 255 * (rgbMax - rgbMin) / hsv.v;
-    if (hsv.s == 0)
-    {
-        hsv.h = 0;
-        return hsv;
-    }
+    float h = c
+        ? ((v == rgb.r) 
+            ? ((float)(rgb.g - rgb.b) / 255.0f / cf)
+            : ((v == rgb.g) 
+                ? (2.0f + (float)(rgb.b - rgb.r) / 255.0f / cf) 
+                : (4.0f + (float)(rgb.r - rgb.g) / 255.0f / cf)))
+        : 0.0f;
 
-    if (rgbMax == rgb.r)
-        hsv.h = 0 + 43 * ((int)rgb.g - (int)rgb.b) / (rgbMax - rgbMin);
-    else if (rgbMax == rgb.g)
-        hsv.h = 85 + 43 * ((int)rgb.b - (int)rgb.r) / (rgbMax - rgbMin);
-    else
-        hsv.h = 171 + 43 * ((int)rgb.r - (int)rgb.g) / (rgbMax - rgbMin);
-
-    return hsv;
+    return {(uint8_t)(60.0 * (h < 0.0f ? h + 6.0f : h) / 360.0f * 255.0f), v ? (uint8_t)(cf / vf * 255.0f) : (uint8_t)0, v};
 }

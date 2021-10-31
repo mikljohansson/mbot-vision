@@ -54,6 +54,12 @@ void setup() {
     oled.setTextSize(1);
     oledPrint("Starting up");
 
+    // Start the camera frame capture task
+    cameraRun();
+
+    // Start color detector
+    blobDetector.start();
+
     // Connect to Mbot
     mbot.start();
 
@@ -94,12 +100,6 @@ void setup() {
     delay(500);
     Serial.println(ret ? "Internet gateway was reachable" : "Not able to reach internet gateway");
     oledPrint("%s %s", WiFi.getHostname(), ip.toString().c_str());
-
-    // Start the camera frame capture task
-    cameraRun();
-
-    // Start color detector
-    blobDetector.start();
 
     // Start webserver
     httpdRun(blobDetector);

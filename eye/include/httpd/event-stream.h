@@ -42,7 +42,7 @@ class EventStream {
             _framerate.init();
 
             while (true) {
-                DetectedBlob blob = _detector.get();
+                DetectedBlob blob = _detector.wait();
                 
                 String data = "data: ";
                 blob.serialize(data);

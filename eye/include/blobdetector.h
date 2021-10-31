@@ -8,6 +8,7 @@
 struct DetectedBlob {
     float x, y;
     bool detected;
+    RgbColor color;
 
     void serialize(String &out);
 };

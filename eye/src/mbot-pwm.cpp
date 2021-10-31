@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "blobdetector.h"
+#include "colorspace.h"
 #include "mbot-pwm.h"
 
 #define MV_PWM_FREQ    1000
@@ -28,8 +29,9 @@ void MBotPWM::run() {
         DetectedBlob blob = _detector.get();
         
         if (blob.detected) {
+            HsvColor hsv = RgbToHsv(blob.color);
             ledcWrite(MV_PWMX_CHAN, MV_PWM_MIN + (int)((float)MV_PWM_RANGE * blob.x));
-            ledcWrite(MV_PWMY_CHAN, MV_PWM_MIN + (int)((float)MV_PWM_RANGE * (1.0f - blob.y)));
+            ledcWrite(MV_PWMY_CHAN, (1 << (MV_PWM_BITS - 1)) + (int)((float)hsv.h * (360.0f / 256.0f)));
         }
         else {
             ledcWrite(MV_PWMX_CHAN, MV_PWM_OFF);

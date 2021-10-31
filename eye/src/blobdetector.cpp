@@ -34,13 +34,18 @@ void printPixel(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 void DetectedBlob::serialize(String &out) {
+    char colorBuffer[24];
+    snprintf(colorBuffer, sizeof(colorBuffer), "#%02X%02X%02X", color.r, color.g, color.b);
+
     out += "{\"x\":";
     out += x;
     out += ",\"y\":";
     out += y;
     out += ",\"detected\":";
     out += detected;
-    out += "}";
+    out += ",\"color\":\"";
+    out += colorBuffer;
+    out += "\"}";
 }
 
 BlobDetector::BlobDetector(RgbColor color)
@@ -169,11 +174,13 @@ void BlobDetector::run() {
                 printPixel(pixel[0], pixel[1], pixel[2]);
                 */
 
-                _detected = {(float)maxx / width, (float)maxy / height, true};
+                //uint8_t *pixel = pixels + (maxy * width + maxx) * 3;
+                //RgbColor rgb = {pixel[0], pixel[1], pixel[2]};
+                _detected = {(float)maxx / width, (float)maxy / height, true, _color};
                 xSemaphoreGive(_signal);
             }
             else {
-                _detected = {0, 0, false};
+                _detected = {0, 0, false, {0, 0, 0}};
             }
 
             _framerate.tick();
