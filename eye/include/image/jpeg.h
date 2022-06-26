@@ -2,14 +2,12 @@
 #define _MV_JPEG_H_
 
 #include <Arduino.h>
-
-struct JDEC;
-struct JRECT;
+#include <tjpgd.h>
 
 class JpegDecoder {
     private:
-        JDEC *_jdec;
-        void *_work;
+        JDEC _jdec;
+        uint8_t _work[TJPGD_WORKSPACE_SIZE];
         uint8_t _scaleFactor;
         
         uint8_t *_output;

@@ -15,42 +15,31 @@
 tflite::ErrorReporter* error_reporter = nullptr;
 const tflite::Model* model = nullptr;
 tflite::MicroInterpreter* interpreter = nullptr;
-TfLiteTensor* input = nullptr;
 
 constexpr int kTensorArenaSize = 136 * 1024;
 static uint8_t *tensor_arena;
 
-TfLiteStatus CropAndQuantizeImage(tflite::ErrorReporter* error_reporter, const uint8_t *image_buffer,
-                                  size_t image_width, size_t image_height,
-                                  const TfLiteTensor* tensor) {
-    TF_LITE_REPORT_ERROR(error_reporter, "Cropping image and quantizing");
-
+static void cropAndQuantizeImage(const uint8_t *pixels, size_t image_width, size_t image_height, int8_t *target) {
     const size_t left = (image_width - kNumCols) / 2;
     const size_t right = image_width - left - kNumCols;
     const size_t top = (image_height - kNumRows) / 2;
-    int8_t* image_data = tensor->data.int8;
 
-    int8_t* target = image_data;
-    const uint8_t* source = image_buffer + (top * image_width + left) * 3;
+    const uint8_t* source = pixels + (top * image_width + left) * 3;
 
     for (size_t y = 0; y < kNumRows; y++) {
-        for (size_t x = 0; x <= kNumCols; x++) {
+        for (size_t x = 0; x < kNumCols; x++) {
             /**
              * Gamma corected rgb to greyscale formula: Y = 0.299R + 0.587G + 0.114B
              * for effiency we use some tricks on this + quantize to [-128, 127]
              */
-            int8_t grey_pixel = ((305 * source[0] + 600 * source[1] + 119 * source[2]) >> 10) - 128;
+            *target = ((305 * (int)source[0] + 600 * (int)source[1] + 119 * (int)source[2]) >> 10) - 128;
 
-            *target = grey_pixel;
             target++;
             source += 3;
         }
 
-        source += (left + right) * 3;
+        source += (right + left) * 3;
     }
-
-    TF_LITE_REPORT_ERROR(error_reporter, "Image cropped and quantized");
-    return kTfLiteOk;
 }
 
 ObjectDetector::ObjectDetector()
@@ -99,7 +88,6 @@ void ObjectDetector::start() {
     micro_op_resolver.AddReshape();
     micro_op_resolver.AddSoftmax();
 
-
     // Build an interpreter to run the model with.
     // NOLINTNEXTLINE(runtime-global-variables)
     static tflite::MicroInterpreter static_interpreter(
@@ -114,12 +102,14 @@ void ObjectDetector::start() {
     }
 
     // Get information about the memory area to use for the model's input.
-    input = interpreter->input(0);
+    _input = interpreter->input(0);
 
-    if ((input->dims->size != 4) || (input->dims->data[0] != 1) ||
-        (input->dims->data[1] != kNumRows) ||
-        (input->dims->data[2] != kNumCols) ||
-        (input->dims->data[3] != kNumChannels) || (input->type != kTfLiteInt8)) {
+    if ((_input->dims->size != 4) || 
+        (_input->dims->data[0] != 1) ||
+        (_input->dims->data[1] != kNumRows) ||
+        (_input->dims->data[2] != kNumCols) ||
+        (_input->dims->data[3] != kNumChannels) || 
+        (_input->type != kTfLiteInt8)) {
         TF_LITE_REPORT_ERROR(error_reporter,
                             "Bad input tensor parameters in model");
         return;
@@ -138,7 +128,6 @@ DetectedObject ObjectDetector::get() {
 }
 
 void ObjectDetector::run() {
-    JpegDecoder decoder;
     _framerate.init();
 
     Serial.print("Starting face detector");
@@ -147,18 +136,18 @@ void ObjectDetector::run() {
         camera_fb_t *fb = fbqueue->take();
 
         if (fb) {
-            bool result = decoder.decompress(fb->buf, fb->len);
+            bool result = _decoder.decompress(fb->buf, fb->len);
             fbqueue->release(fb);
 
             if (!result) {
                 continue;
             }
 
-            uint8_t *pixels = decoder.getOutputFrame();
-            size_t width = decoder.getOutputWidth(), height = decoder.getOutputHeight();
+            uint8_t *pixels = _decoder.getOutputFrame();
+            size_t width = _decoder.getOutputWidth(), height = _decoder.getOutputHeight();
 
             // Copy frame to input tensor
-            CropAndQuantizeImage(error_reporter, pixels, width, height, input);
+            cropAndQuantizeImage(pixels, width, height, _input->data.int8);
 
             // Run the model on this input and make sure it succeeds.
             if (kTfLiteOk != interpreter->Invoke()) {
@@ -172,16 +161,44 @@ void ObjectDetector::run() {
             int8_t person_score = output->data.uint8[kPersonIndex];
             int8_t no_person_score = output->data.uint8[kNotAPersonIndex];
 
-            float person_score_f =
+            float person_score_f = 
                 (person_score - output->params.zero_point) * output->params.scale;
             float no_person_score_f =
                 (no_person_score - output->params.zero_point) * output->params.scale;
 
-            serialPrint("Person detection scores: %f yes, %f no\n", person_score, no_person_score);
+            serialPrint("Person detection scores: %f yes, %f no\n", person_score_f, no_person_score_f);
             delay(1000);
 
             _framerate.tick();
         }
+    }
+}
+
+static int8_t *buffer = 0;
+
+void ObjectDetector::draw(uint8_t *pixels, size_t width, size_t height) {
+    if (!buffer) {
+        buffer = new int8_t[kNumCols * kNumRows * kNumChannels];
+        memset(buffer, 0, kNumCols * kNumRows * kNumChannels);
+    }
+    
+    cropAndQuantizeImage(pixels, width, height, buffer);
+
+    const size_t left = (width - kNumCols) / 2;
+    const size_t right = width - left - kNumCols;
+    const size_t top = (height - kNumRows) / 2;
+
+    uint8_t* target = pixels + (top * width + left) * 3;
+    const int8_t* source = buffer;
+
+    for (size_t y = 0; y < kNumRows; y++) {
+        for (size_t x = 0; x < kNumCols; x++) {
+            target[0] = target[1] = target[2] = (uint8_t)((int)*source + 128);
+            target += 3;
+            source++;
+        }
+
+        target += (right + left) * 3;
     }
 }
 

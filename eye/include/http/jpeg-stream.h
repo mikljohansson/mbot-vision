@@ -40,7 +40,7 @@ class JpegStream {
 
         void run() {
             Serial.println("Starting mjpeg stream");
-            JpegDecoder *decoder = 0;
+            std::unique_ptr<JpegDecoder> decoder;
 
             send("HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=gc0p4Jq0M2Yt08jU534c0p\r\n");
             _framerate.init();
@@ -63,17 +63,18 @@ class JpegStream {
                     if (fb->format == PIXFORMAT_JPEG) {
                         if (_showDetector) {
                             if (!decoder) {
-                                decoder = new JpegDecoder();
+                                decoder.reset(new JpegDecoder());
                             }
 
                             if (decoder->decompress(fb->buf, fb->len)) {
-                                size_t framelen = decoder->getOutputWidth() * decoder->getOutputHeight() * 3;
-                                //_detector.debug(decoder->getOutputFrame(), decoder->getOutputWidth(), decoder->getOutputHeight());
+                                _detector.draw(decoder->getOutputFrame(), decoder->getOutputWidth(), decoder->getOutputHeight());
                                 
                                 // Encode to JPEG and send
                                 if (!fmt2jpg_cb(
-                                        decoder->getOutputFrame(), framelen, decoder->getOutputWidth(), decoder->getOutputHeight(), 
-                                        PIXFORMAT_RGB888, 40, sendStatic, this)) {
+                                        decoder->getOutputFrame(), 
+                                        decoder->getOutputWidth() * decoder->getOutputHeight() * JD_BPP, 
+                                        decoder->getOutputWidth(), decoder->getOutputHeight(), 
+                                        PIXFORMAT_RGB888, 60, sendStatic, this)) {
                                     Serial.println("Failed to convert framebuffer to jpeg");
                                 }
                             }
@@ -82,7 +83,7 @@ class JpegStream {
                             send(fb->buf, fb->len);
                         }
                     }
-                    else if (!frame2jpg_cb(fb, 40, sendStatic, this)) {
+                    else if (!frame2jpg_cb(fb, 60, sendStatic, this)) {
                         Serial.println("Failed to convert framebuffer to jpeg");
                     }
 
@@ -91,12 +92,10 @@ class JpegStream {
                 }
 
                 if (!_client.connected()) {
-                    Serial.print("HTTP stream disconnected");
+                    Serial.println("HTTP stream disconnected");
                     break;
                 }
             }
-
-            delete decoder;
         }
 
         static void runStatic(void *p) {

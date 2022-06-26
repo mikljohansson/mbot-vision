@@ -28,7 +28,7 @@ class BlobDetector {
         void start();
         DetectedBlob wait();
         DetectedBlob get();
-        void debug(uint8_t *pixels, size_t width, size_t height);
+        void draw(uint8_t *pixels, size_t width, size_t height);
 
     private:
         void run();

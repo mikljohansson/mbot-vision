@@ -4,22 +4,14 @@
 #include <tjpgdcnf.h>
 #include <tjpgd.h>
 
-/* Bytes per pixel of image output */
-#define N_BPP               (3 - JD_FORMAT)
-#define JPEG_WORK_SIZE      (3500 + 320 + (6 << 10))
-
 // Downscale 1/4 (1 << 2)
 #define JPEG_SCALE_FACTOR   2
 
 JpegDecoder::JpegDecoder() {
-    _jdec = new JDEC();
-    _work = malloc(JPEG_WORK_SIZE);
     _output = 0;
 }
 
 JpegDecoder::~JpegDecoder() {
-    delete _jdec;
-    free(_work);
     free(_output);
 }
 
@@ -40,7 +32,7 @@ bool JpegDecoder::decompress(const uint8_t *input, size_t len) {
     _inputlen = len;
     _inputoffset = 0;
     
-    JRESULT res = jd_prepare(_jdec, readStatic, _work, JPEG_WORK_SIZE, this);
+    JRESULT res = jd_prepare(&_jdec, readStatic, _work, TJPGD_WORKSPACE_SIZE, this);
     
     if (res != JDR_OK) {
         Serial.println("Failed to prepare JPEG decoder");
@@ -49,12 +41,12 @@ bool JpegDecoder::decompress(const uint8_t *input, size_t len) {
 
     // Allocate output frame buffer if needed
     if (!_output) {
-        _outputwidth = (_jdec->width >> JPEG_SCALE_FACTOR);
-        _outputheight = (_jdec->height >> JPEG_SCALE_FACTOR);
-        _output = (uint8_t*)malloc(N_BPP * _outputwidth * _outputheight);
+        _outputwidth = (_jdec.width >> JPEG_SCALE_FACTOR);
+        _outputheight = (_jdec.height >> JPEG_SCALE_FACTOR);
+        _output = (uint8_t*)malloc(JD_BPP * _outputwidth * _outputheight);
     }
 
-    res = jd_decomp(_jdec, writeStatic, JPEG_SCALE_FACTOR);
+    res = jd_decomp(&_jdec, writeStatic, JPEG_SCALE_FACTOR);
     
     if (res != JDR_OK) {
         Serial.println("Failed to decode JPEG image");
@@ -83,19 +75,20 @@ size_t JpegDecoder::readStatic(JDEC *jd, uint8_t *buff, size_t nbyte) {
 }
 
 int JpegDecoder::write(JDEC *jd, void *bitmap, JRECT *rect) {
-    uint8_t *src, *dst;
-    uint16_t y, bws;
-    unsigned int bwd;
-
-    /* Copy the output image rectanglar to the frame buffer */
-    src = (uint8_t*)bitmap;
-    dst = _output + N_BPP * (rect->top * _outputwidth + rect->left);  /* Left-top of destination rectangular */
-    bws = N_BPP * (rect->right - rect->left + 1);     /* Width of output rectangular [byte] */
-    bwd = N_BPP * _outputwidth;                         /* Width of frame buffer [byte] */
+    const uint8_t *source = (const uint8_t *)bitmap;
+    uint8_t *target = _output + (rect->top * _outputwidth + rect->left) * JD_BPP;
     
-    for (y = rect->top; y <= rect->bottom; y++) {
-        memcpy(dst, src, bws);   /* Copy a line */
-        src += bws; dst += bwd;  /* Next line */
+    for (size_t y = rect->top; y <= rect->bottom; y++) {
+        for (size_t x = rect->left; x <= rect->right; x++) {
+            target[0] = source[2];  // Swap red and blue which are getting mixed up for some reason
+            target[1] = source[1];
+            target[2] = source[0];
+
+            target += JD_BPP;
+            source += JD_BPP;
+        }
+
+        target += (_outputwidth - rect->right - 1 + rect->left) * JD_BPP;
     }
 
     yield();

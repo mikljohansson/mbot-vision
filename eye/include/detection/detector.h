@@ -14,6 +14,7 @@ class Detector {
     public:
         virtual DetectedObject wait() = 0;
         virtual DetectedObject get() = 0;
+        virtual void draw(uint8_t *pixels, size_t width, size_t height) = 0;
 };
 
 #endif

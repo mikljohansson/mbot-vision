@@ -70,7 +70,7 @@ DetectedBlob BlobDetector::get() {
     return _detected;
 }
 
-void BlobDetector::debug(uint8_t *pixels, size_t width, size_t height) {
+void BlobDetector::draw(uint8_t *pixels, size_t width, size_t height) {
     size_t framelen = width * height * 3;
     HsvColor hsv = RgbToHsv(_color);
     

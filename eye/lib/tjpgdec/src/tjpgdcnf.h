@@ -12,6 +12,9 @@
 /  2: Grayscale (8-bit/pix)
 */
 
+/* Bytes per pixel of image output */
+#define JD_BPP          (3 - JD_FORMAT)
+
 #define	JD_USE_SCALE	1
 /* Switches output descaling feature.
 /  0: Disable
@@ -31,3 +34,11 @@
 /  2: + Table conversion for huffman decoding (wants 6 << HUFF_BIT bytes of RAM)
 */
 
+// Do not change this, it is the minimum size in bytes of the workspace needed by the decoder
+#if JD_FASTDECODE == 0
+ #define TJPGD_WORKSPACE_SIZE 3100
+#elif JD_FASTDECODE == 1
+ #define TJPGD_WORKSPACE_SIZE 3500
+#elif JD_FASTDECODE == 2
+ #define TJPGD_WORKSPACE_SIZE (3500 + 6144)
+#endif

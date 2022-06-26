@@ -1,16 +1,22 @@
-#ifndef _MV_FACEDETECTOR_H_
-#define _MV_FACEDETECTOR_H_
+#ifndef _MV_OBJECTDETECTOR_H_
+#define _MV_OBJECTDETECTOR_H_
 
 #include <Arduino.h>
-#include "detector.h"
+#include "detection/detector.h"
+#include "image/jpeg.h"
 #include "framerate.h"
+
+class TfLiteTensor;
 
 class ObjectDetector : public Detector {
     private:
         TaskHandle_t _task;
+        JpegDecoder _decoder;
         Framerate _framerate;
         DetectedObject _detected;
         SemaphoreHandle_t _signal;
+
+        TfLiteTensor *_input;
 
     public:
         ObjectDetector();
@@ -19,6 +25,7 @@ class ObjectDetector : public Detector {
         void start();
         DetectedObject wait();
         DetectedObject get();
+        void draw(uint8_t *pixels, size_t width, size_t height);
 
     private:
         void run();
