@@ -1,18 +1,18 @@
 #include <Arduino.h>
 #include <WebServer.h>
-#include "httpd.h"
-#include "camera.h"
+#include "http/httpd.h"
+#include "image/camera.h"
 #include "framerate.h"
-#include "blobdetector.h"
+#include "detection/detector.h"
 #include "wiring.h"
 
-#include "httpd/index.h"
-#include "httpd/jpeg-stream.h"
-#include "httpd/event-stream.h"
+#include "http/index.h"
+#include "http/jpeg-stream.h"
+#include "http/event-stream.h"
 
 static WebServer server(80);
 static TaskHandle_t httpdTask;
-static BlobDetector *detector;
+static Detector *detector;
 
 void handleIndex() {
     Serial.print("Sending index.html to: ");
@@ -79,7 +79,7 @@ void httpdServiceRequests(void *p) {
     vTaskDelete(NULL);
 }
 
-void httpdRun(BlobDetector &d) {
+void httpdRun(Detector &d) {
     detector = &d;
     xTaskCreatePinnedToCore(httpdServiceRequests, "httpd", 10000, NULL, 2, &httpdTask, 1);
 }

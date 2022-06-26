@@ -7,10 +7,10 @@
 #include <esp_camera.h>
 #include <esp_wifi.h>
 #include <ESP32Ping.h>
-#include "camera.h"
-#include "httpd.h"
+#include "http/httpd.h"
+#include "image/camera.h"
+#include "detection/objectdetector.h"
 #include "wiring.h"
-#include "blobdetector.h"
 #include "mbot-pwm.h"
 #include "common.h"
 
@@ -29,9 +29,10 @@ static const char *hostname = "mbot";
 Adafruit_SSD1306 oled(128, 32);
 static WiFiMulti wifiMulti;
 
-static BlobDetector blobDetector({175, 60, 75});
+//static BlobDetector detector({175, 60, 75});
+static ObjectDetector detector;
 
-static MBotPWM mbot(blobDetector);
+static MBotPWM mbot(detector);
 
 void setup() {
     pinMode(MV_LED_PIN, OUTPUT);
@@ -45,8 +46,9 @@ void setup() {
     while (!Serial);
     Serial.println("Starting up");
     Serial.printf("Core %d, clock %d MHz\n", xPortGetCoreID(), getCpuFrequencyMhz());
-    Serial.printf("  XTAL %d MHz, APB %d MHz\n\n", getXtalFrequencyMhz(), getApbFrequency() / 1000000);
-
+    serialPrint("Total heap: %d\n", ESP.getHeapSize());
+    serialPrint("Total PSRAM: %d\n", ESP.getPsramSize());
+    
     // Initialize display
     Wire.setPins(MV_SDA_PIN, MV_SCL_PIN);
     oled.begin();
@@ -57,8 +59,8 @@ void setup() {
     // Start the camera frame capture task
     cameraRun();
 
-    // Start color detector
-    blobDetector.start();
+    // Start object detector
+    detector.start();
 
     // Connect to Mbot
     mbot.start();
@@ -102,12 +104,16 @@ void setup() {
     oledPrint("%s %s", WiFi.getHostname(), ip.toString().c_str());
 
     // Start webserver
-    httpdRun(blobDetector);
+    httpdRun(detector);
 
     digitalWrite(MV_LED_PIN, HIGH);
     Serial.println("Setup complete");
 
     ledcWrite(MV_FLASH_CHAN, 0);
+
+    serialPrint("Startup completed\n");
+    serialPrint("Free heap: %d\n", ESP.getFreeHeap());
+    serialPrint("Free PSRAM: %d\n", ESP.getFreePsram());
 }
 
 void loop() {

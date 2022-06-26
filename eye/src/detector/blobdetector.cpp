@@ -1,7 +1,7 @@
-#include "blobdetector.h"
-#include "camera.h"
-#include "jpeg.h"
-#include "colorspace.h"
+#include "detection/blobdetector.h"
+#include "image/camera.h"
+#include "image/jpeg.h"
+#include "image/colorspace.h"
 
 #define HUE_THRESHOLD           16
 #define SATURATION_THRESHOLD    64

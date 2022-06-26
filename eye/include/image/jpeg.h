@@ -10,6 +10,7 @@ class JpegDecoder {
     private:
         JDEC *_jdec;
         void *_work;
+        uint8_t _scaleFactor;
         
         uint8_t *_output;
         size_t _outputwidth, _outputheight;

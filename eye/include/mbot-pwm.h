@@ -4,15 +4,15 @@
 #include <Arduino.h>
 #include "wiring.h"
 
-class BlobDetector;
+class Detector;
 
 class MBotPWM {
     private:
         TaskHandle_t _task;
-        BlobDetector &_detector;
+        Detector &_detector;
 
     public:
-        MBotPWM(BlobDetector &detector);
+        MBotPWM(Detector &detector);
 
         void start();
 

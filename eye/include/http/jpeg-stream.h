@@ -4,10 +4,10 @@
 
 #include <Arduino.h>
 #include <WebServer.h>
-#include "camera.h"
 #include "framerate.h"
-#include "jpeg.h"
-#include "blobdetector.h"
+#include "image/camera.h"
+#include "image/jpeg.h"
+#include "detection/detector.h"
 
 class JpegStream {
     private:
@@ -15,10 +15,10 @@ class JpegStream {
         TaskHandle_t _task;
         Framerate _framerate;
         bool _showDetector;
-        BlobDetector &_detector;
+        Detector &_detector;
 
     public:
-        JpegStream(const WiFiClient &client, bool showDetector, BlobDetector &detector)
+        JpegStream(const WiFiClient &client, bool showDetector, Detector &detector)
          : _client(client), _framerate("Stream framerate: %02f\n"), _showDetector(showDetector), _detector(detector) {}
 
         void start() {
@@ -68,7 +68,7 @@ class JpegStream {
 
                             if (decoder->decompress(fb->buf, fb->len)) {
                                 size_t framelen = decoder->getOutputWidth() * decoder->getOutputHeight() * 3;
-                                _detector.debug(decoder->getOutputFrame(), decoder->getOutputWidth(), decoder->getOutputHeight());
+                                //_detector.debug(decoder->getOutputFrame(), decoder->getOutputWidth(), decoder->getOutputHeight());
                                 
                                 // Encode to JPEG and send
                                 if (!fmt2jpg_cb(

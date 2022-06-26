@@ -1,8 +1,8 @@
 #ifndef _MV_HTTPD_H_
 #define _MV_HTTPD_H_
 
-class BlobDetector;
+class Detector;
 
-void httpdRun(BlobDetector &d);
+void httpdRun(Detector &d);
 
 #endif

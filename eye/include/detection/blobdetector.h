@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 #include "framerate.h"
-#include "colorspace.h"
+#include "image/colorspace.h"
 
 struct DetectedBlob {
     float x, y;

@@ -31,4 +31,8 @@ void oledPrint(const char *message, T... args) {
     oled.display();
 }
 
+static void oledDisplayImage(const uint8_t *image, size_t width, size_t height) {
+    oled.drawGrayscaleBitmap(0, 0, image, width, height);
+}
+
 #endif

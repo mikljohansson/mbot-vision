@@ -5,17 +5,17 @@
 #include <Arduino.h>
 #include <WebServer.h>
 #include "framerate.h"
-#include "blobdetector.h"
+#include "detection/detector.h"
 
 class EventStream {
     private:
         WiFiClient _client;
         TaskHandle_t _task;
         Framerate _framerate;
-        BlobDetector &_detector;
+        Detector &_detector;
 
     public:
-        EventStream(const WiFiClient &client, BlobDetector &detector)
+        EventStream(const WiFiClient &client, Detector &detector)
          : _client(client), _framerate("Event stream framerate: %02f\n"), _detector(detector) {}
 
         void start() {
@@ -42,7 +42,7 @@ class EventStream {
             _framerate.init();
 
             while (true) {
-                DetectedBlob blob = _detector.wait();
+                DetectedObject blob = _detector.wait();
                 
                 String data = "data: ";
                 blob.serialize(data);

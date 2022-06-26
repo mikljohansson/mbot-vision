@@ -1,4 +1,5 @@
-#include "camera.h"
+#include "image/camera.h"
+
 #include <Arduino.h>
 #include <esp_camera.h>
 #include "framerate.h"

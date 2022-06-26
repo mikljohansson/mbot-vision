@@ -1,14 +1,15 @@
+#include "image/jpeg.h"
+
 // http://elm-chan.org/fsw/tjpgd/en/appnote.html
 #include <tjpgdcnf.h>
 #include <tjpgd.h>
-#include "jpeg.h"
 
 /* Bytes per pixel of image output */
 #define N_BPP               (3 - JD_FORMAT)
 #define JPEG_WORK_SIZE      (3500 + 320 + (6 << 10))
 
-// Downscale 1/8 (1 << 3)
-#define JPEG_SCALE_FACTOR   3
+// Downscale 1/4 (1 << 2)
+#define JPEG_SCALE_FACTOR   2
 
 JpegDecoder::JpegDecoder() {
     _jdec = new JDEC();
