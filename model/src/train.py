@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import time
 import math
 
@@ -18,7 +19,7 @@ from src.model import create_model
 parser = argparse.ArgumentParser(description='Summarize adcopy')
 parser.add_argument('-t', '--train', required=True, help='Directory of training images')
 parser.add_argument('-p', '--parallel', type=int, help='Number of worker processes', default=0)
-parser.add_argument('--epochs', type=int, help='Number of epochs', default=5000)
+parser.add_argument('--epochs', type=int, help='Number of epochs', default=50)
 parser.add_argument('--batch-size', type=int, help='Batch size', default=8)
 parser.add_argument('--accumulation-steps', type=int, help='Gradient accumulation steps', default=1)
 parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay to use.")
@@ -60,8 +61,7 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
-total_steps = int(max(len(dataset) / args.batch_size, 1) * args.epochs)
-completed_steps = 0
+optimization_steps = int(len(dataloader) * args.epochs / args.accumulation_steps)
 cuda_available = torch.cuda.is_available()
 
 # Tensorboard output
@@ -74,9 +74,9 @@ logger.info(f'  Number of epochs {args.epochs}')
 logger.info(f'  Per device batch size {args.batch_size}')
 logger.info(f'  Gradient accumulation steps {args.accumulation_steps}')
 logger.info(f'  Total batch size {args.batch_size * args.accumulation_steps}')
-logger.info(f'  Total optimization steps {total_steps}')
+logger.info(f'  Total optimization steps {optimization_steps}')
 
-pbar = tqdm(total=total_steps, unit=' steps', disable=not accelerator.is_local_main_process)
+pbar = tqdm(total=optimization_steps, unit=' steps', disable=not accelerator.is_local_main_process)
 last_logged_image = 0
 
 
@@ -87,29 +87,31 @@ def normalize_loss(v):
     return v.clamp(0, 1)
 
 
+step = 0
+
 for epoch in range(args.epochs):
     for inputs, targets in dataloader:
         outputs = model(inputs)
 
         alpha_loss = F.binary_cross_entropy_with_logits(outputs, targets, reduction='none')
         loss = alpha_loss.mean()
-
         accelerator.backward(loss)
-        optimizer.step()
+        step += 1
 
-        completed_steps += 1
-        pbar.update(1)
+        if step % args.accumulation_steps == 0 or step == len(dataloader) - 1:
+            optimizer.step()
+            pbar.update(1)
 
-        writer.add_scalar(f'model/loss', loss, completed_steps)
-        writer.add_scalar(f'system/CPU utilization %', psutil.cpu_percent(), completed_steps)
-        writer.add_scalar(f'system/Host memory usage %', psutil.virtual_memory().percent, completed_steps)
+        writer.add_scalar(f'model/loss', loss, step)
+        writer.add_scalar(f'system/CPU utilization %', psutil.cpu_percent(), step)
+        writer.add_scalar(f'system/Host memory usage %', psutil.virtual_memory().percent, step)
 
         if cuda_available:
             cuda_free_mem, cuda_total_mem = torch.cuda.mem_get_info()
-            writer.add_scalar(f'system/GPU utilization %', torch.cuda.utilization(), completed_steps)
-            writer.add_scalar(f'system/GPU memory usage %', round((cuda_total_mem - cuda_free_mem) / cuda_total_mem * 100.), completed_steps)
-            writer.add_scalar(f'system/Torch reserved memory %', round(torch.cuda.memory_reserved() / cuda_total_mem * 100.), completed_steps)
-            writer.add_scalar(f'system/Torch allocated memory %', round(torch.cuda.memory_allocated() / cuda_total_mem * 100.), completed_steps)
+            writer.add_scalar(f'system/GPU utilization %', torch.cuda.utilization(), step)
+            writer.add_scalar(f'system/GPU memory usage %', round((cuda_total_mem - cuda_free_mem) / cuda_total_mem * 100.), step)
+            writer.add_scalar(f'system/Torch reserved memory %', round(torch.cuda.memory_reserved() / cuda_total_mem * 100.), step)
+            writer.add_scalar(f'system/Torch allocated memory %', round(torch.cuda.memory_allocated() / cuda_total_mem * 100.), step)
 
         if last_logged_image < time.time() - 1:
             last_logged_image = time.time()
@@ -122,4 +124,13 @@ for epoch in range(args.epochs):
                 output_mask.repeat(3, 1, 1),
             ]
 
-            writer.add_image(f'model/sample', torchvision.utils.make_grid(cells, nrow=1), completed_steps)
+            writer.add_image(f'model/sample', torchvision.utils.make_grid(cells, nrow=1), step)
+
+pbar.close()
+
+if args.output_dir is not None:
+    accelerator.wait_for_everyone()
+
+    model_path = os.path.join(args.output_dir, 'eye.pth')
+    logger.info(f'Saving model to {model_path}')
+    accelerator.save(model, model_path)
