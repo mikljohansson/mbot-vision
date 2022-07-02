@@ -1,2 +1,4 @@
-tf-nightly
-pillow
+torch
+accelerate
+pynvml
+tqdm

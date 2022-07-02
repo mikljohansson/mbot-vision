@@ -63,11 +63,11 @@ if __name__ == '__main__':
     model.load_weights(sys.argv[1], by_name=True, skip_mismatch=True)
     model.summary()
 
-    #new_model = change_model(model)
+    #new_model = change_model(model.py)
     #new_model.summary()
 
 #    for inp in representative_data_gen():
- #       pred = model.predict(inp)
+ #       pred = model.py.predict(inp)
   #      dpred = decode_predictions(pred)
    #     print([p for p in dpred[0] if p[2] > 0.5])
 

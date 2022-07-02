@@ -1,7 +1,0 @@
-model/checkpoints/*
-model/bin
-model/dataset
-model/lib
-model/lib64
-model/pyvenv.cfg
-model/share
