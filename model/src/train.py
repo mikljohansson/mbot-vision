@@ -19,7 +19,7 @@ from src.model import create_model
 parser = argparse.ArgumentParser(description='Summarize adcopy')
 parser.add_argument('-t', '--train', required=True, help='Directory of training images')
 parser.add_argument('-p', '--parallel', type=int, help='Number of worker processes', default=0)
-parser.add_argument('--epochs', type=int, help='Number of epochs', default=50)
+parser.add_argument('--epochs', type=int, help='Number of epochs', default=5)
 parser.add_argument('--batch-size', type=int, help='Batch size', default=8)
 parser.add_argument('--accumulation-steps', type=int, help='Gradient accumulation steps', default=1)
 parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay to use.")
@@ -134,3 +134,8 @@ if args.output_dir is not None:
     model_path = os.path.join(args.output_dir, 'eye.pth')
     logger.info(f'Saving model to {model_path}')
     accelerator.save(model, model_path)
+
+    # Convert to ONNX
+    inputs, targets = next(iter(dataloader))
+    model_path = os.path.join(args.output_dir, 'eye.onnx')
+    torch.onnx.export(model, inputs, model_path, export_params=True, verbose=True)
