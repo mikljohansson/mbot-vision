@@ -87,14 +87,26 @@ def normalize_loss(v):
     return v.clamp(0, 1)
 
 
+def calculate_loss(outputs, targets, z_loss=1e-4):
+    alpha_loss = F.binary_cross_entropy_with_logits(outputs, targets, reduction='none')
+    loss = alpha_loss.mean()
+
+    # Add a separate loss to keep the logits from drifting too far from zero and encourage the
+    # logits to be normalized log-probabilities. This might also help prevent NaN's
+    # https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
+    z = z_loss * outputs.logsumexp(dim=(2, 3)).square().sum(1).mean()
+    loss += z
+
+    return loss, alpha_loss, z
+
+
 step = 0
 
 for epoch in range(args.epochs):
     for inputs, targets in dataloader:
         outputs = model(inputs)
 
-        alpha_loss = F.binary_cross_entropy_with_logits(outputs, targets, reduction='none')
-        loss = alpha_loss.mean()
+        loss, alpha_loss, z_loss = calculate_loss(outputs, targets)
         accelerator.backward(loss)
         step += 1
 
@@ -103,6 +115,7 @@ for epoch in range(args.epochs):
             pbar.update(1)
 
         writer.add_scalar(f'model/loss', loss, step)
+        writer.add_scalar(f'model/z_loss', z_loss, step)
         writer.add_scalar(f'system/CPU utilization %', psutil.cpu_percent(), step)
         writer.add_scalar(f'system/Host memory usage %', psutil.virtual_memory().percent, step)
 
@@ -130,12 +143,8 @@ pbar.close()
 
 if args.output_dir is not None:
     accelerator.wait_for_everyone()
+    unwrapped_model = accelerator.unwrap_model(model)
 
-    model_path = os.path.join(args.output_dir, 'eye.pth')
+    model_path = os.path.join(args.output_dir, 'model.pth')
     logger.info(f'Saving model to {model_path}')
-    accelerator.save(model, model_path)
-
-    # Convert to ONNX
-    inputs, targets = next(iter(dataloader))
-    model_path = os.path.join(args.output_dir, 'eye.onnx')
-    torch.onnx.export(model, inputs, model_path, export_params=True, verbose=True)
+    accelerator.save(unwrapped_model.state_dict(), model_path)

@@ -2,3 +2,5 @@ torch
 accelerate
 pynvml
 tqdm
+onnx
+tensorflow

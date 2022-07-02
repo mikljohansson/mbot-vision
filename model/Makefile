@@ -1,7 +1,7 @@
 PARALLEL ?= $(shell grep -c ^processor /proc/cpuinfo)
 
 LOGGING_DIR ?= experiments/$(shell git rev-parse --abbrev-ref HEAD)
-LOGGING_PATH = $(shell echo "$(LOGGING_DIR)/`date +'%Y%m%d-%H%M%S'`")
+LOGGING_PATH := $(shell echo "$(LOGGING_DIR)/`date +'%Y%m%d-%H%M%S'`")
 EXPERIMENT ?= $(LOGGING_PATH)
 
 dataset/train:
@@ -11,9 +11,14 @@ dataset/train:
 
 dataset: dataset/train
 
-train:
+train-torch:
 	PYTHONPATH=. accelerate launch --mixed_precision no src/train.py -t dataset/train -p $(PARALLEL) \
 		--output_dir "$(LOGGING_PATH)"
+
+convert:
+	PYTHONPATH=. python src/convert.py -m $(EXPERIMENT)/model.pth -d dataset/train
+
+train: train-torch convert
 
 # Start tensorboard in the background
 tensorboard:
