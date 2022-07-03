@@ -13,6 +13,15 @@ def make_divisible(x, divisor):
     # Upward revision the value x to make it evenly divisible by the divisor.
     return math.ceil(x / divisor) * divisor
 
+
+class ResidualBlock(nn.Sequential):
+    def __init__(self, *args):
+        super(ResidualBlock, self).__init__(*args)
+
+    def forward(self, x):
+        return x + super().forward(x)
+
+
 class SegmentationHead(nn.Module):
     def __init__(self):
         super().__init__()
@@ -43,6 +52,13 @@ class SegmentationHead(nn.Module):
 
         self.fuse = nn.Sequential(
             nn.Conv2d(96, 32, kernel_size=3, padding=1),
+            ResidualBlock(
+                nn.Conv2d(32, 32, kernel_size=3, padding=1),
+                nn.GroupNorm(8, 32),
+                nn.Conv2d(32, 128, kernel_size=1),
+                nn.SiLU(),
+                nn.Conv2d(128, 32, kernel_size=1),
+            ),
             nn.SiLU(),
             nn.Conv2d(32, 1, kernel_size=1)
         )

@@ -7,14 +7,26 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision.transforms import transforms
 
+mean = torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1)
+std = torch.tensor([0.229, 0.224, 0.225]).reshape(-1, 1, 1)
 
 def normalize(image):
+    # Normalize color values
+    image = (image - mean) / std
+
     # Change from range [0, 1] to [-1, 1]
-    return (image - 0.5) / 0.5
+    image = (image - 0.5) / 0.5
+
+    return image
 
 def denormalize(image):
     # Change from range [-1, 1] to [0, 1]
-    return image * 0.5 + 0.5
+    image = image * 0.5 + 0.5
+
+    # Normalize color values
+    image = (image * std) + mean
+
+    return image
 
 class ImageDataset(Dataset):
     def __init__(self, images_path):

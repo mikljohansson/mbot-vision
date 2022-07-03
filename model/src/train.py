@@ -143,12 +143,12 @@ for epoch in range(args.epochs):
 
         if last_logged_image < time.time() - 1:
             last_logged_image = time.time()
-            output_target = upsample_like(downsample_like(targets[[0]], outputs[[0]]), inputs[[0]], mode='nearest')
-            output_loss = upsample_like(normalize_loss(alpha_loss[[0]]), inputs[[0]], mode='nearest')
-            output_mask = upsample_like(torch.sigmoid(outputs[[0]]), inputs[[0]], mode='nearest')
+            output_target = upsample_like(downsample_like(targets[[0]], outputs[[0]]), inputs[[0]], mode='nearest').detach().cpu()
+            output_loss = upsample_like(normalize_loss(alpha_loss[[0]]), inputs[[0]], mode='nearest').detach().cpu()
+            output_mask = upsample_like(torch.sigmoid(outputs[[0]]), inputs[[0]], mode='nearest').detach().cpu()
 
             cells = [
-                denormalize(inputs[0]),
+                denormalize(inputs[0].detach().cpu()),
                 output_target[0].repeat(3, 1, 1),
                 output_mask[0].repeat(3, 1, 1),
                 output_loss[0].repeat(3, 1, 1),
