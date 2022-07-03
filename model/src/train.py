@@ -22,7 +22,7 @@ parser.add_argument('-t', '--train', type=str, required=True, help='Directory of
 parser.add_argument('-m', '--model', type=str, help='Load pretrained weights from this model pth')
 parser.add_argument('-p', '--parallel', type=int, help='Number of worker processes', default=0)
 parser.add_argument('--epochs', type=int, help='Number of epochs', default=1)
-parser.add_argument('--batch-size', type=int, help='Batch size', default=2)
+parser.add_argument('--batch-size', type=int, help='Batch size', default=4)
 parser.add_argument('--accumulation-steps', type=int, help='Gradient accumulation steps', default=1)
 args = parser.parse_args()
 
@@ -83,7 +83,7 @@ last_logged_image = 0
 
 def normalize_loss(v):
     # Normalize loss in a logscale between 0 and 1
-    epsilon = 0.01
+    epsilon = 0.05
     v = torch.log((v / (v.max() + epsilon)) * 10 + 1) / math.log(10 + 1)
     return v.clamp(0, 1)
 

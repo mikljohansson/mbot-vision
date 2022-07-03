@@ -60,6 +60,8 @@ def render_sample(sample, classes, positive_sample=True):
 
     box = get_input_box(mask, args.target_width, args.target_height)
     mask = Image.fromarray(np.minimum(mask, 255), 'L')
+
+    assert image.width == mask.width and image.height == mask.height
     mask = mask.resize((args.target_width, args.target_height), box=box, resample=Image.Resampling.LANCZOS)
     image = image.resize((args.target_width, args.target_height), box=box, resample=Image.Resampling.LANCZOS)
 

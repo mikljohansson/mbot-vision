@@ -10,6 +10,9 @@ ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --m
 COCO_EPOCHS ?= 100
 COCO_BATCH_SIZE ?= 64
 
+REC_EPOCHS ?= 100
+REC_BATCH_SIZE ?= 16
+
 dataset/coco/train: src/coco.py src/image.py
 	mkdir -p dataset/coco/train
 	touch dataset/coco/train
@@ -30,7 +33,7 @@ $(EXPERIMENT)/coco.pth: dataset/coco/train
 
 $(EXPERIMENT)/recorded.pth: $(EXPERIMENT)/coco.pth dataset/recorded/train
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) src/train.py -p $(PARALLEL) \
-		-t dataset/recorded/train -m $< -o $@
+		-t dataset/recorded/train -m $< -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE)
 
 $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
 	PYTHONPATH=. python src/convert.py -m $< -d dataset/recorded/train
