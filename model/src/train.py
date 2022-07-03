@@ -9,12 +9,12 @@ import torch
 import torch.nn.functional as F
 import torchvision
 from accelerate import Accelerator
-from torch.optim import AdamW
+from ranger21 import Ranger21
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from src.dataset import ImageDataset, denormalize
-from src.model import create_model
+from src.model import create_model_cfg
 
 parser = argparse.ArgumentParser(description='Summarize adcopy')
 parser.add_argument("-o", "--output", type=str, required=True, help="File to write model pth")
@@ -24,7 +24,6 @@ parser.add_argument('-p', '--parallel', type=int, help='Number of worker process
 parser.add_argument('--epochs', type=int, help='Number of epochs', default=1)
 parser.add_argument('--batch-size', type=int, help='Batch size', default=2)
 parser.add_argument('--accumulation-steps', type=int, help='Gradient accumulation steps', default=1)
-parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay to use.")
 args = parser.parse_args()
 
 output_dir = os.path.dirname(args.output)
@@ -49,26 +48,20 @@ logger.info(accelerator.state)
 
 dataset = ImageDataset(args.train)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.parallel)
-model = create_model()
+dataloader = accelerator.prepare(dataloader)
+
+model, cfg = create_model_cfg()
 
 if args.model:
     logger.info(f'Loading pretrained weights from {args.model}')
     model.load_state_dict(torch.load(args.model))
 
-no_decay = ["bias", "LayerNorm.weight"]
-optimizer_grouped_parameters = [
-    {
-        "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-        "weight_decay": args.weight_decay,
-    },
-    {
-        "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
-        "weight_decay": 0.0,
-    },
-]
+optimizer = Ranger21(model.parameters(),
+                     lr=1e-3,
+                     num_epochs=args.epochs,
+                     num_batches_per_epoch=(len(dataloader) / args.accumulation_steps))
+model, optimizer = accelerator.prepare(model, optimizer)
 
-optimizer = AdamW(optimizer_grouped_parameters)
-model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)
 optimization_steps = int(len(dataloader) * args.epochs / args.accumulation_steps)
 cuda_available = torch.cuda.is_available()
 
@@ -150,14 +143,15 @@ for epoch in range(args.epochs):
 
         if last_logged_image < time.time() - 1:
             last_logged_image = time.time()
+            output_target = upsample_like(downsample_like(targets[[0]], outputs[[0]]), inputs[[0]], mode='nearest')
             output_loss = upsample_like(normalize_loss(alpha_loss[[0]]), inputs[[0]], mode='nearest')
             output_mask = upsample_like(torch.sigmoid(outputs[[0]]), inputs[[0]], mode='nearest')
 
             cells = [
                 denormalize(inputs[0]),
-                targets[0].repeat(3, 1, 1),
-                output_loss[0].repeat(3, 1, 1),
+                output_target[0].repeat(3, 1, 1),
                 output_mask[0].repeat(3, 1, 1),
+                output_loss[0].repeat(3, 1, 1),
             ]
 
             writer.add_image(f'{model_name}/sample', torchvision.utils.make_grid(cells, nrow=1), step)

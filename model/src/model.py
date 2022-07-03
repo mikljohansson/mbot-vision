@@ -98,5 +98,12 @@ class MBotVisionModel(nn.Module):
     def deploy(self):
         pass
 
+def create_model_cfg():
+    cfg = Config.fromfile(os.path.join(os.path.dirname(__file__), 'yolov6/configs/yolov6p.py'))
+    model = MBotVisionModel(cfg)
+    return model, cfg
+
 def create_model():
-    return MBotVisionModel(Config.fromfile(os.path.join(os.path.dirname(__file__), 'yolov6/configs/yolov6p.py')))
+    model, _ = create_model_cfg()
+    return model
+
