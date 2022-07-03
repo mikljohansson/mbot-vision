@@ -51,7 +51,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, sh
 model = create_model()
 
 if args.model:
-    logging(f'Loading pretrained weights from {args.model}')
+    logging.info(f'Loading pretrained weights from {args.model}')
     model.load_state_dict(torch.load(args.model))
 
 no_decay = ["bias", "LayerNorm.weight"]

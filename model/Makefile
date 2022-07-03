@@ -31,6 +31,10 @@ $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
 
 train: $(EXPERIMENT)/recorded.tflite
 
+# Print a model summary
+summary:
+	CUDA_VISIBLE_DEVICES= PYTHONPATH=. python src/summary.py
+
 # Start tensorboard in the background
 tensorboard:
 	tensorboard --bind_all --samples_per_plugin images=500 --logdir experiments &
