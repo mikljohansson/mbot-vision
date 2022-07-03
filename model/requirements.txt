@@ -4,3 +4,5 @@ pynvml
 tqdm
 onnx
 tensorflow
+fiftyone
+pycocotools

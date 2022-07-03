@@ -17,36 +17,21 @@ from src.dataset import ImageDataset, denormalize
 from src.model import create_model
 
 parser = argparse.ArgumentParser(description='Summarize adcopy')
-parser.add_argument('-t', '--train', required=True, help='Directory of training images')
+parser.add_argument("-o", "--output", type=str, required=True, help="File to write model pth")
+parser.add_argument('-t', '--train', type=str, required=True, help='Directory of training images')
+parser.add_argument('-m', '--model', type=str, help='Load pretrained weights from this model pth')
 parser.add_argument('-p', '--parallel', type=int, help='Number of worker processes', default=0)
-parser.add_argument('--epochs', type=int, help='Number of epochs', default=5)
+parser.add_argument('--epochs', type=int, help='Number of epochs', default=1)
 parser.add_argument('--batch-size', type=int, help='Batch size', default=8)
 parser.add_argument('--accumulation-steps', type=int, help='Gradient accumulation steps', default=1)
 parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay to use.")
-parser.add_argument("--output_dir", type=str, default=None, help="Where to output model and logs")
 args = parser.parse_args()
 
-dataset = ImageDataset(args.train)
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.parallel)
-model = create_model()
-
-no_decay = ["bias", "LayerNorm.weight"]
-optimizer_grouped_parameters = [
-    {
-        "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-        "weight_decay": args.weight_decay,
-    },
-    {
-        "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
-        "weight_decay": 0.0,
-    },
-]
-
-optimizer = AdamW(optimizer_grouped_parameters)
+output_dir = os.path.dirname(args.output)
+model_name = os.path.splitext(os.path.basename(args.output))[0]
 
 accelerator = Accelerator()
 device = accelerator.device
-model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)
 
 # Setup logging, we only want one process per machine to log things on the screen.
 # accelerator.is_local_main_process is only True for one process per machine.
@@ -61,12 +46,34 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
+dataset = ImageDataset(args.train)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.parallel)
+model = create_model()
+
+if args.model:
+    logging(f'Loading pretrained weights from {args.model}')
+    model.load_state_dict(torch.load(args.model))
+
+no_decay = ["bias", "LayerNorm.weight"]
+optimizer_grouped_parameters = [
+    {
+        "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+        "weight_decay": args.weight_decay,
+    },
+    {
+        "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
+        "weight_decay": 0.0,
+    },
+]
+
+optimizer = AdamW(optimizer_grouped_parameters)
+model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)
 optimization_steps = int(len(dataloader) * args.epochs / args.accumulation_steps)
 cuda_available = torch.cuda.is_available()
 
 # Tensorboard output
-logger.info(f'Results will be saved in {args.output_dir}')
-writer = SummaryWriter(args.output_dir)
+logger.info(f'Results will be saved in {output_dir}')
+writer = SummaryWriter(output_dir)
 
 logger.info("***** Running training *****")
 logger.info(f'  Number of samples {len(dataset)}')
@@ -114,8 +121,8 @@ for epoch in range(args.epochs):
             optimizer.step()
             pbar.update(1)
 
-        writer.add_scalar(f'model/loss', loss, step)
-        writer.add_scalar(f'model/z_loss', z_loss, step)
+        writer.add_scalar(f'{model_name}/loss', loss, step)
+        writer.add_scalar(f'{model_name}/z_loss', z_loss, step)
         writer.add_scalar(f'system/CPU utilization %', psutil.cpu_percent(), step)
         writer.add_scalar(f'system/Host memory usage %', psutil.virtual_memory().percent, step)
 
@@ -137,14 +144,12 @@ for epoch in range(args.epochs):
                 output_mask.repeat(3, 1, 1),
             ]
 
-            writer.add_image(f'model/sample', torchvision.utils.make_grid(cells, nrow=1), step)
+            writer.add_image(f'{model_name}/sample', torchvision.utils.make_grid(cells, nrow=1), step)
 
 pbar.close()
 
-if args.output_dir is not None:
-    accelerator.wait_for_everyone()
-    unwrapped_model = accelerator.unwrap_model(model)
+accelerator.wait_for_everyone()
+unwrapped_model = accelerator.unwrap_model(model)
 
-    model_path = os.path.join(args.output_dir, 'model.pth')
-    logger.info(f'Saving model to {model_path}')
-    accelerator.save(unwrapped_model.state_dict(), model_path)
+logger.info(f'Saving model to {args.output}')
+accelerator.save(unwrapped_model.state_dict(), args.output)

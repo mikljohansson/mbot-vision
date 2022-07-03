@@ -7,6 +7,8 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
+from src.image import get_input_box
+
 parser = argparse.ArgumentParser(description='Summarize adcopy')
 parser.add_argument('-i', '--input', required=True, help='Directory of images to process')
 parser.add_argument('-a', '--annotated', required=True, help='Directory to store annotated images')
@@ -21,29 +23,9 @@ files = glob.glob(os.path.join(args.input, '*.jpg'))
 
 model = torch.hub.load('ultralytics/yolov5', 'yolov5x', trust_repo=True)
 
-
-def get_input_box(image):
-    # https://stackoverflow.com/a/4744625
-    input_aspect = float(image.width) / float(image.height)
-    target_aspect = float(args.target_width) / float(args.target_height)
-
-    if input_aspect > target_aspect:
-        # Then crop the left and right edges:
-        new_width = int(target_aspect * image.height)
-        offset = (image.width - new_width) / 2
-        resize = (offset, 0, image.width - offset, image.height)
-    else:
-        # ... crop the top and bottom:
-        new_height = int(image.width / target_aspect)
-        offset = (image.height - new_height) / 2
-        resize = (0, offset, image.width, image.height - offset)
-
-    return resize
-
-
 for i in range(0, len(files), args.batch_size):
     batch = files[i:(i + args.batch_size)]
-    results = model(files)
+    results = model(batch)
 
     for filename, image, predictions in zip(results.files, results.imgs, results.pred):
         image = Image.fromarray(image, 'RGB') if isinstance(image, np.ndarray) else image
@@ -57,8 +39,9 @@ for i in range(0, len(files), args.batch_size):
 
             draw.ellipse(((int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3]))), fill=255)
 
-        image = image.resize((args.target_width, args.target_height), box=get_input_box(image), resample=Image.Resampling.LANCZOS)
-        mask = mask.resize((args.target_width, args.target_height), box=get_input_box(mask), resample=Image.Resampling.LANCZOS)
+        box = get_input_box(np.asarray(mask, dtype=np.uint8), args.target_width, args.target_height)
+        image = image.resize((args.target_width, args.target_height), box=box, resample=Image.Resampling.LANCZOS)
+        mask = mask.resize((args.target_width, args.target_height), box=box, resample=Image.Resampling.LANCZOS)
         image = Image.merge('RGBA', (*image.split(), *mask.split()))
 
         targetname = os.path.join(args.train, os.path.splitext(os.path.basename(filename))[0] + '.png')
