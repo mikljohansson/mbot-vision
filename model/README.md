@@ -19,5 +19,5 @@ pip install -e .
 
 ```
 CUDA_VISIBLE_DEVICES=0 make dataset
-CUDA_VISIBLE_DEVICES=0 make train
+CUDA_VISIBLE_DEVICES=0 PARALLEL=2 make train
 ```

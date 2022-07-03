@@ -7,3 +7,4 @@ tensorflow
 fiftyone
 pycocotools
 torchinfo
+addict
