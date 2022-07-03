@@ -1,36 +1,20 @@
 import os
 import glob
 
+import cv2
+import numpy as np
 import torch
 import torchvision
+import torch.nn.functional as F
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision.transforms import transforms
 
-mean = torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1)
-std = torch.tensor([0.229, 0.224, 0.225]).reshape(-1, 1, 1)
-
-def normalize(image):
-    # Normalize color values
-    image = (image - mean) / std
-
-    # Change from range [0, 1] to [-1, 1]
-    image = (image - 0.5) / 0.5
-
-    return image
-
-def denormalize(image):
-    # Change from range [-1, 1] to [0, 1]
-    image = image * 0.5 + 0.5
-
-    # Normalize color values
-    image = (image * std) + mean
-
-    return image
 
 class ImageDataset(Dataset):
-    def __init__(self, images_path):
+    def __init__(self, images_path, target_size):
         super(ImageDataset, self).__init__()
+        self.target_size = target_size
 
         self.images = glob.glob(os.path.join(images_path, '*.png'))
         self.transforms = torch.nn.Sequential(
@@ -41,6 +25,8 @@ class ImageDataset(Dataset):
             transforms.ColorJitter(),
             transforms.RandomGrayscale(p=0.2),
         )
+
+        self.gradient_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
 
     def __len__(self):
         return len(self.images)
@@ -57,5 +43,15 @@ class ImageDataset(Dataset):
 
         target = image[[3]]
         image = image[0:3]
-        image = normalize(image)
-        return image, target
+
+        # Downsample to same size as model output
+        output_shape = (self.target_size[1], self.target_size[0])
+        target = F.interpolate(target.unsqueeze(0), size=output_shape, mode='bilinear', align_corners=False)[0]
+
+        # Generate a unknown mask around the edges, so the loss function can ignore that. Creates the
+        # object outline by taking the difference between dilation and erosion
+        unknown_mask = cv2.morphologyEx((target[-2:] * 255).numpy().astype(dtype=np.float32),
+                                        cv2.MORPH_GRADIENT, self.gradient_kernel, iterations=1)
+        unknown_mask = torch.tensor((unknown_mask > 0) * 1., dtype=torch.float16)
+
+        return image, target, unknown_mask

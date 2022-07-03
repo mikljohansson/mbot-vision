@@ -105,7 +105,16 @@ class MBotVisionModel(nn.Module):
 
         self.head = SegmentationHead()
 
+        self.mean2x = torch.nn.Parameter(2. * torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1), requires_grad=False)
+        self.std = torch.nn.Parameter(torch.tensor([0.229, 0.224, 0.225]).reshape(-1, 1, 1), requires_grad=False)
+
     def forward(self, x):
+        # Normalize image values and convert to [-1, 1] range inside the network, to simplify deployment
+        #image = (image - self.mean) / self.std
+        #image = (image - 0.5) / 0.5
+        # https://www.wolframalpha.com/input?i=simplify+%28%28x+-+m%29+%2F+s+-+0.5%29+%2F+0.5
+        x = (2. * x - self.mean2x) / self.std - 1.
+
         x = self.backbone(x)
         x = self.neck(x)
         x = self.head(x)

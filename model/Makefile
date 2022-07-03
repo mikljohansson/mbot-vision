@@ -7,11 +7,11 @@ EXPERIMENT ?= $(LOGGING_PATH)
 
 ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision no
 
-COCO_EPOCHS ?= 100
-COCO_BATCH_SIZE ?= 64
+COCO_EPOCHS ?= 20
+COCO_BATCH_SIZE ?= 4
 
-REC_EPOCHS ?= 100
-REC_BATCH_SIZE ?= 16
+REC_EPOCHS ?= 20
+REC_BATCH_SIZE ?= 4
 
 dataset/coco/train: src/coco.py src/image.py
 	mkdir -p dataset/coco/train

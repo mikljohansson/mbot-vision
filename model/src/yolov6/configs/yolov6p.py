@@ -1,6 +1,7 @@
 model = dict(
     type='YOLOv6p',
     pretrained=None,
+    output_size=(20, 15),   # WxH
     depth_multiple=0.33,
     width_multiple=0.25,
     backbone=dict(

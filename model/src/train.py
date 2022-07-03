@@ -13,7 +13,7 @@ from ranger21 import Ranger21
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from src.dataset import ImageDataset, denormalize
+from src.dataset import ImageDataset
 from src.model import create_model_cfg
 
 parser = argparse.ArgumentParser(description='Summarize adcopy')
@@ -46,11 +46,11 @@ logging.basicConfig(
 
 logger.info(accelerator.state)
 
-dataset = ImageDataset(args.train)
+model, cfg = create_model_cfg()
+
+dataset = ImageDataset(args.train, target_size=cfg.model.output_size)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.parallel)
 dataloader = accelerator.prepare(dataloader)
-
-model, cfg = create_model_cfg()
 
 if args.model:
     logger.info(f'Loading pretrained weights from {args.model}')
@@ -77,9 +77,6 @@ logger.info(f'  Gradient accumulation steps {args.accumulation_steps}')
 logger.info(f'  Total batch size {args.batch_size * args.accumulation_steps * accelerator.num_processes}')
 logger.info(f'  Total optimization steps {optimization_steps}')
 
-pbar = tqdm(total=optimization_steps, unit=' steps', disable=not accelerator.is_local_main_process)
-last_logged_image = 0
-
 
 def normalize_loss(v):
     # Normalize loss in a logscale between 0 and 1
@@ -100,11 +97,9 @@ def upsample_like(t, like, mode='bilinear'):
     return t
 
 
-def calculate_loss(outputs, targets, z_loss=1e-4):
-    downsampled_targets = downsample_like(targets, outputs)
-
-    alpha_loss = F.binary_cross_entropy_with_logits(outputs, downsampled_targets, reduction='none')
-    loss = alpha_loss.mean()
+def calculate_loss(outputs, targets, unknown_mask, z_loss=1e-4):
+    alpha_loss = F.binary_cross_entropy_with_logits(outputs, targets, reduction='none')
+    loss = (alpha_loss * unknown_mask).mean()
 
     # Add a separate loss to keep the logits from drifting too far from zero and encourage the
     # logits to be normalized log-probabilities. This might also help prevent NaN's
@@ -116,12 +111,14 @@ def calculate_loss(outputs, targets, z_loss=1e-4):
 
 
 step = 0
+last_logged_image = 0
+pbar = tqdm(total=optimization_steps, unit=' steps', disable=not accelerator.is_local_main_process)
 
 for epoch in range(args.epochs):
-    for inputs, targets in dataloader:
+    for inputs, targets, unknown_mask in dataloader:
         outputs = model(inputs)
 
-        loss, alpha_loss, z_loss = calculate_loss(outputs, targets)
+        loss, alpha_loss, z_loss = calculate_loss(outputs, targets, unknown_mask)
         accelerator.backward(loss)
         step += 1
 
@@ -143,15 +140,17 @@ for epoch in range(args.epochs):
 
         if last_logged_image < time.time() - 1:
             last_logged_image = time.time()
-            output_target = upsample_like(downsample_like(targets[[0]], outputs[[0]]), inputs[[0]], mode='nearest').detach().cpu()
+            output_target = upsample_like(targets[[0]], inputs[[0]], mode='nearest').detach().cpu()
+            output_unknown_mask = upsample_like(unknown_mask[[0]], inputs[[0]], mode='nearest').detach().cpu()
             output_loss = upsample_like(normalize_loss(alpha_loss[[0]]), inputs[[0]], mode='nearest').detach().cpu()
             output_mask = upsample_like(torch.sigmoid(outputs[[0]]), inputs[[0]], mode='nearest').detach().cpu()
 
             cells = [
-                denormalize(inputs[0].detach().cpu()),
+                inputs[0].detach().cpu(),
                 output_target[0].repeat(3, 1, 1),
                 output_mask[0].repeat(3, 1, 1),
                 output_loss[0].repeat(3, 1, 1),
+                output_unknown_mask[0].repeat(3, 1, 1),
             ]
 
             writer.add_image(f'{model_name}/sample', torchvision.utils.make_grid(cells, nrow=1), step)
