@@ -95,8 +95,22 @@ def normalize_loss(v):
     return v.clamp(0, 1)
 
 
+def downsample_like(t, like, mode='bilinear'):
+    if t.shape[-2:] != like.shape[-2:]:
+        return torch.nn.functional.interpolate(t, size=like.shape[-2:], mode=mode, align_corners=(False if mode != 'nearest' else None))
+    return t
+
+
+def upsample_like(t, like, mode='bilinear'):
+    if t.shape[-2:] != like.shape[-2:]:
+        return torch.nn.functional.interpolate(t, size=like.shape[-2:], mode=mode, align_corners=(False if mode != 'nearest' else None))
+    return t
+
+
 def calculate_loss(outputs, targets, z_loss=1e-4):
-    alpha_loss = F.binary_cross_entropy_with_logits(outputs, targets, reduction='none')
+    downsampled_targets = downsample_like(targets, outputs)
+
+    alpha_loss = F.binary_cross_entropy_with_logits(outputs, downsampled_targets, reduction='none')
     loss = alpha_loss.mean()
 
     # Add a separate loss to keep the logits from drifting too far from zero and encourage the
@@ -136,13 +150,14 @@ for epoch in range(args.epochs):
 
         if last_logged_image < time.time() - 1:
             last_logged_image = time.time()
-            output_mask = torch.sigmoid(outputs[0])
+            output_loss = upsample_like(normalize_loss(alpha_loss[[0]]), inputs[[0]], mode='nearest')
+            output_mask = upsample_like(torch.sigmoid(outputs[[0]]), inputs[[0]], mode='nearest')
 
             cells = [
                 denormalize(inputs[0]),
                 targets[0].repeat(3, 1, 1),
-                normalize_loss(alpha_loss[0]).repeat(3, 1, 1),
-                output_mask.repeat(3, 1, 1),
+                output_loss[0].repeat(3, 1, 1),
+                output_mask[0].repeat(3, 1, 1),
             ]
 
             writer.add_image(f'{model_name}/sample', torchvision.utils.make_grid(cells, nrow=1), step)
