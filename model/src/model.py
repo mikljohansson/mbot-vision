@@ -3,6 +3,7 @@ import os.path
 
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 from src.yolov6.models.efficientrep import EfficientRep
 from src.yolov6.models.reppan import RepPANNeck
@@ -22,32 +23,39 @@ class ResidualBlock(nn.Sequential):
         return x + super().forward(x)
 
 
+class UpsampleInterpolate2d(nn.Module):
+    def __init__(self):
+        super(UpsampleInterpolate2d, self).__init__()
+
+    def forward(self, x):
+        return F.interpolate(x, scale_factor=2, mode='nearest')
+
+
 class SegmentationHead(nn.Module):
     def __init__(self):
         super().__init__()
 
         self.in1 = nn.Sequential(
             nn.GroupNorm(8, 32),
-            nn.Conv2d(32, 32, kernel_size=3, padding=1, stride=2),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1),
             nn.SiLU(),
-            nn.Conv2d(32, 32, kernel_size=3, padding=1, stride=2),
-            nn.GroupNorm(8, 32),
         )
 
         self.in2 = nn.Sequential(
             nn.GroupNorm(8, 64),
-            nn.Conv2d(64, 32, kernel_size=3, padding=1, stride=2),
+            UpsampleInterpolate2d(),
+            nn.Conv2d(64, 32, kernel_size=3, padding=1),
             nn.SiLU(),
-            nn.Conv2d(32, 32, kernel_size=3, padding=1),
-            nn.GroupNorm(8, 32),
         )
 
         self.in3 = nn.Sequential(
             nn.GroupNorm(8, 128),
+            UpsampleInterpolate2d(),
             nn.Conv2d(128, 64, kernel_size=3, padding=1),
             nn.SiLU(),
+            UpsampleInterpolate2d(),
             nn.Conv2d(64, 32, kernel_size=3, padding=1),
-            nn.GroupNorm(8, 32),
+            nn.SiLU(),
         )
 
         self.fuse = nn.Sequential(
