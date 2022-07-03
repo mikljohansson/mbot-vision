@@ -22,7 +22,7 @@ parser.add_argument('-t', '--train', type=str, required=True, help='Directory of
 parser.add_argument('-m', '--model', type=str, help='Load pretrained weights from this model pth')
 parser.add_argument('-p', '--parallel', type=int, help='Number of worker processes', default=0)
 parser.add_argument('--epochs', type=int, help='Number of epochs', default=1)
-parser.add_argument('--batch-size', type=int, help='Batch size', default=8)
+parser.add_argument('--batch-size', type=int, help='Batch size', default=2)
 parser.add_argument('--accumulation-steps', type=int, help='Gradient accumulation steps', default=1)
 parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay to use.")
 args = parser.parse_args()
@@ -37,7 +37,6 @@ device = accelerator.device
 # accelerator.is_local_main_process is only True for one process per machine.
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO if accelerator.is_local_main_process else logging.ERROR)
-logger.info(accelerator.state)
 
 # Make one log on every process with the configuration for debugging.
 logging.basicConfig(
@@ -46,12 +45,14 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
+logger.info(accelerator.state)
+
 dataset = ImageDataset(args.train)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.parallel)
 model = create_model()
 
 if args.model:
-    logging.info(f'Loading pretrained weights from {args.model}')
+    logger.info(f'Loading pretrained weights from {args.model}')
     model.load_state_dict(torch.load(args.model))
 
 no_decay = ["bias", "LayerNorm.weight"]
@@ -80,7 +81,7 @@ logger.info(f'  Number of samples {len(dataset)}')
 logger.info(f'  Number of epochs {args.epochs}')
 logger.info(f'  Per device batch size {args.batch_size}')
 logger.info(f'  Gradient accumulation steps {args.accumulation_steps}')
-logger.info(f'  Total batch size {args.batch_size * args.accumulation_steps}')
+logger.info(f'  Total batch size {args.batch_size * args.accumulation_steps * accelerator.num_processes}')
 logger.info(f'  Total optimization steps {optimization_steps}')
 
 pbar = tqdm(total=optimization_steps, unit=' steps', disable=not accelerator.is_local_main_process)

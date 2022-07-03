@@ -1,8 +1,11 @@
 PARALLEL ?= $(shell grep -c ^processor /proc/cpuinfo)
+GPU_COUNT ?= $(shell if [ "${CUDA_VISIBLE_DEVICES}" != "" ]; then echo "${CUDA_VISIBLE_DEVICES}" | tr "," " "| wc -w; else nvidia-smi --query-gpu=name --format=csv,noheader | grep -v -e '^$$' | wc -l; fi)
 
 LOGGING_DIR ?= experiments/$(shell git rev-parse --abbrev-ref HEAD)
 LOGGING_PATH := $(shell echo "$(LOGGING_DIR)/`date +'%Y%m%d-%H%M%S'`")
 EXPERIMENT ?= $(LOGGING_PATH)
+
+ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision no
 
 dataset/coco/train: src/coco.py src/image.py
 	mkdir -p dataset/coco/train
@@ -19,11 +22,11 @@ dataset/recorded/train: src/annotate.py src/image.py
 dataset: dataset/coco/train dataset/recorded/train
 
 $(EXPERIMENT)/coco.pth: dataset/coco/train
-	PYTHONPATH=. accelerate launch --mixed_precision no src/train.py -p $(PARALLEL) \
+	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) src/train.py -p $(PARALLEL) \
 		-t dataset/coco/train -o $@
 
 $(EXPERIMENT)/recorded.pth: $(EXPERIMENT)/coco.pth dataset/recorded/train
-	PYTHONPATH=. accelerate launch --mixed_precision no src/train.py -p $(PARALLEL) \
+	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) src/train.py -p $(PARALLEL) \
 		-t dataset/recorded/train -m $< -o $@
 
 $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
