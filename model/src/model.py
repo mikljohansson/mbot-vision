@@ -117,7 +117,7 @@ class MBotVisionModel(nn.Module):
         self.mean2x = torch.nn.Parameter(2. * torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1), requires_grad=False)
         self.std = torch.nn.Parameter(torch.tensor([0.229, 0.224, 0.225]).reshape(-1, 1, 1), requires_grad=False)
 
-        self.initialize_weights()
+        #self.initialize_weights()
 
     def initialize_weights(self):
         for m in self.modules():

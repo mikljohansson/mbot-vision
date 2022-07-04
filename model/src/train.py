@@ -99,7 +99,7 @@ def upsample_like(t, like, mode='bilinear'):
 
 def calculate_loss(outputs, targets, unknown_mask, z_loss=1e-4):
     alpha_loss = F.binary_cross_entropy_with_logits(outputs, targets, reduction='none')
-    loss = (alpha_loss * unknown_mask).mean()
+    loss = (alpha_loss * (1. - unknown_mask)).mean()
 
     # Add a separate loss to keep the logits from drifting too far from zero and encourage the
     # logits to be normalized log-probabilities. This might also help prevent NaN's
