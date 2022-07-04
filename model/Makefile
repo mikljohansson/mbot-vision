@@ -7,11 +7,12 @@ EXPERIMENT ?= $(LOGGING_PATH)
 
 ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision no
 
-COCO_EPOCHS ?= 20
-COCO_BATCH_SIZE ?= 64
-COCO_LEARNING_RATE ?= 1e-4
+# YOLOv6 trains with total batch size 64 for 2M optimization steps
+COCO_EPOCHS ?= 200
+COCO_BATCH_SIZE ?= 16
+COCO_LEARNING_RATE ?= 3e-4
 
-REC_EPOCHS ?= 20
+REC_EPOCHS ?= 1000
 REC_BATCH_SIZE ?= 4
 REC_LEARNING_RATE ?= 1e-4
 
