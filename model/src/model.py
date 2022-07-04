@@ -36,40 +36,31 @@ class SegmentationHead(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.in1 = nn.Sequential(
-            nn.GroupNorm(8, 32),
-            nn.Conv2d(32, 32, kernel_size=3, padding=1),
-            nn.SiLU(),
-        )
+        self.in1 = nn.Identity()
 
         self.in2 = nn.Sequential(
-            nn.GroupNorm(8, 64),
-            UpsampleInterpolate2d(),
             nn.Conv2d(64, 32, kernel_size=3, padding=1),
-            nn.SiLU(),
+            UpsampleInterpolate2d(),
         )
 
         self.in3 = nn.Sequential(
-            nn.GroupNorm(8, 128),
-            UpsampleInterpolate2d(),
             nn.Conv2d(128, 64, kernel_size=3, padding=1),
-            nn.SiLU(),
             UpsampleInterpolate2d(),
             nn.Conv2d(64, 32, kernel_size=3, padding=1),
-            nn.SiLU(),
+            UpsampleInterpolate2d(),
         )
 
         self.fuse = nn.Sequential(
             nn.Conv2d(96, 32, kernel_size=3, padding=1),
             ResidualBlock(
-                nn.Conv2d(32, 32, kernel_size=3, padding=1),
+                nn.Conv2d(32, 32, kernel_size=3, padding=1, groups=32),
                 nn.GroupNorm(8, 32),
                 nn.Conv2d(32, 128, kernel_size=1),
                 nn.SiLU(),
                 nn.Conv2d(128, 32, kernel_size=1),
             ),
             nn.SiLU(),
-            nn.Conv2d(32, 1, kernel_size=1)
+            nn.Conv2d(32, 1, kernel_size=1),
         )
 
     def forward(self, x):
@@ -136,6 +127,7 @@ class MBotVisionModel(nn.Module):
         # Fuse 3x3, 1x1 and identity layers
         for layer in self.modules():
             if hasattr(layer, 'switch_to_deploy'):
+                print(f'Switching {layer} to deployment configuration')
                 layer.switch_to_deploy()
 
 def create_model_cfg():
