@@ -99,7 +99,7 @@ def upsample_like(t, like, mode='bilinear'):
     return t
 
 
-def calculate_loss(outputs, targets, unknown_mask, z_loss=1e-4):
+def calculate_loss(outputs, targets, unknown_mask, z_loss=1e-5):
     alpha_loss = F.binary_cross_entropy_with_logits(outputs, targets, reduction='none')
     loss = (alpha_loss * (1. - unknown_mask)).mean()
 

@@ -13,12 +13,13 @@ parser = argparse.ArgumentParser(description='Summarize adcopy')
 parser.add_argument('-i', '--input', required=True, help='Directory of images to process')
 parser.add_argument('-a', '--annotated', required=True, help='Directory to store annotated images')
 parser.add_argument('-t', '--train', required=True, help='Directory to store training images')
+parser.add_argument('-c', '--classes', required=True, help='Comma separated list of classes of interest')
 parser.add_argument('--batch-size', type=int, help='Batch size', default=64)
 parser.add_argument('--target-width', type=int, help='Input width', default=160)
 parser.add_argument('--target-height', type=int, help='Input height', default=120)
 args = parser.parse_args()
 
-labels_of_interest = {'sports ball', 'apple', 'orange'}
+labels_of_interest = set(args.classes.split(','))
 files = glob.glob(os.path.join(args.input, '*.jpg'))
 
 model = torch.hub.load('ultralytics/yolov5', 'yolov5x', trust_repo=True)

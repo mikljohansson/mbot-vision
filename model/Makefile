@@ -8,7 +8,7 @@ EXPERIMENT ?= $(LOGGING_PATH)
 ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision no
 
 # YOLOv6 trains with total batch size 64 for 2M optimization steps
-COCO_EPOCHS ?= 200
+COCO_EPOCHS ?= 400
 COCO_BATCH_SIZE ?= 64
 COCO_LEARNING_RATE ?= 1e-4
 
@@ -26,7 +26,8 @@ dataset/recorded/train: src/annotate.py src/image.py
 	mkdir -p dataset/recorded/annotated
 	mkdir -p dataset/recorded/train
 	touch dataset/recorded/train
-	PYTHONPATH=. python src/annotate.py -i dataset/recorded/images -a dataset/recorded/annotated -t dataset/recorded/train
+	PYTHONPATH=. python src/annotate.py -c "sports ball,apple,orange" \
+		-i dataset/recorded/images -a dataset/recorded/annotated -t dataset/recorded/train \
 
 dataset: dataset/coco/train dataset/recorded/train
 

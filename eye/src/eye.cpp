@@ -7,6 +7,7 @@
 #include <esp_camera.h>
 #include <esp_wifi.h>
 #include <ESP32Ping.h>
+#include <TimeLib.h>
 #include "http/httpd.h"
 #include "image/camera.h"
 #include "detection/objectdetector.h"
@@ -55,12 +56,6 @@ void setup() {
     serialPrint("Total heap: %d\n", ESP.getHeapSize());
     serialPrint("Total PSRAM: %d\n", ESP.getPsramSize());
     
-    // Initialize SD card
-    if (LOG_TO_SDCARD) {
-        Serial.println("Initializing memory card");
-        logger.begin();
-    }
-
     // Initialize display
     if (!LOG_TO_SDCARD) {
         Wire.setPins(MV_SDA_PIN, MV_SCL_PIN);
@@ -129,6 +124,13 @@ void setup() {
         now = time(nullptr);
     }
     Serial.println(now);
+    setTime(time(nullptr));
+
+    // Initialize SD card
+    if (LOG_TO_SDCARD) {
+        Serial.println("Initializing memory card");
+        logger.begin();
+    }
 
     // Start webserver
     httpdRun(detector);

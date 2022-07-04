@@ -13,7 +13,7 @@ bool DataLogger::begin() {
     int len = snprintf(NULL, 0, DIRECTORY_FORMAT, year(), month(), day(), hour(), minute());
     if (len) {
         char buf[len];
-        sprintf(buf, DIRECTORY_FORMAT, DIRECTORY_FORMAT, year(), month(), day(), hour(), minute());
+        sprintf(buf, DIRECTORY_FORMAT, year(), month(), day(), hour(), minute());
         _directory = buf;
     }
     
