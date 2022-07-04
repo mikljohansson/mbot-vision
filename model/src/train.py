@@ -143,17 +143,20 @@ for epoch in range(args.epochs):
             output_target = upsample_like(targets[[0]], inputs[[0]], mode='nearest').detach().cpu()
             output_unknown_mask = upsample_like(unknown_mask[[0]], inputs[[0]], mode='nearest').detach().cpu()
             output_loss = upsample_like(normalize_loss(alpha_loss[[0]]), inputs[[0]], mode='nearest').detach().cpu()
+            output_masked_loss = upsample_like(normalize_loss(alpha_loss[[0]] * (1. - unknown_mask[[0]])), inputs[[0]], mode='nearest').detach().cpu()
             output_mask = upsample_like(torch.sigmoid(outputs[[0]]), inputs[[0]], mode='nearest').detach().cpu()
 
             cells = [
                 inputs[0].detach().cpu(),
                 output_target[0].repeat(3, 1, 1),
-                output_mask[0].repeat(3, 1, 1),
-                output_loss[0].repeat(3, 1, 1),
                 output_unknown_mask[0].repeat(3, 1, 1),
+
+                output_loss[0].repeat(3, 1, 1),
+                output_mask[0].repeat(3, 1, 1),
+                output_masked_loss[0].repeat(3, 1, 1),
             ]
 
-            writer.add_image(f'{model_name}/sample', torchvision.utils.make_grid(cells, nrow=1), step)
+            writer.add_image(f'{model_name}/sample', torchvision.utils.make_grid(cells, nrow=3), step)
 
 pbar.close()
 
