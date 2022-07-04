@@ -50,8 +50,8 @@ class ImageDataset(Dataset):
 
         # Generate a unknown mask around the edges, so the loss function can ignore that. Creates the
         # object outline by taking the difference between dilation and erosion
-        unknown_mask = cv2.morphologyEx(((target[-2:] > 0) * 255).numpy().astype(dtype=np.float32),
+        unknown_mask = cv2.morphologyEx((target[-2:] * 255).numpy().astype(dtype=np.float32),
                                         cv2.MORPH_GRADIENT, self.gradient_kernel, iterations=1)
-        unknown_mask = torch.tensor((unknown_mask > 0) * 1., dtype=torch.float16)
+        unknown_mask = torch.tensor(unknown_mask, dtype=torch.float32) / 255
 
         return image, target, unknown_mask

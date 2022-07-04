@@ -7,7 +7,7 @@ import tensorflow as tf
 from onnx_tf.backend import prepare
 
 from src.dataset import ImageDataset
-from src.model import create_model
+from src.model import create_model_cfg
 
 # See https://github.com/sithu31296/PyTorch-ONNX-TFLite
 
@@ -16,15 +16,16 @@ parser.add_argument("-m", "--model", type=str, default=None, help="Input model i
 parser.add_argument("-d", "--dataset", required=True, help="Directory of sample images")
 args = parser.parse_args()
 
-dataset = ImageDataset(args.dataset)
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
-
-model = create_model()
+model, cfg = create_model_cfg()
 model.load_state_dict(torch.load(args.model))
+model.deploy()
 model.eval()
 
+dataset = ImageDataset(args.dataset, target_size=cfg.model.output_size)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
+
 # Convert to ONNX and TFLite
-inputs, targets = next(iter(dataloader))
+inputs, _, _ = next(iter(dataloader))
 onnx_model_path = os.path.splitext(args.model)[0] + '.onnx'
 torch.onnx.export(model, inputs, onnx_model_path,
                   opset_version=12, export_params=True, verbose=False,
@@ -45,7 +46,7 @@ num_calibration_steps = 100
 
 def representative_dataset_gen():
     step = 0
-    for inputs, targets in dataloader:
+    for inputs, _, _ in dataloader:
         # get sample input data as numpy array
         yield [inputs.numpy()]
 

@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from src.yolov6.models.efficientrep import EfficientRep
 from src.yolov6.models.reppan import RepPANNeck
 from src.yolov6.utils.config import Config
+from src.yolov6.utils.torch_utils import fuse_model, fuse_conv_and_bn
 
 
 def make_divisible(x, divisor):
@@ -116,6 +117,19 @@ class MBotVisionModel(nn.Module):
         self.mean2x = torch.nn.Parameter(2. * torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1), requires_grad=False)
         self.std = torch.nn.Parameter(torch.tensor([0.229, 0.224, 0.225]).reshape(-1, 1, 1), requires_grad=False)
 
+        self.initialize_weights()
+
+    def initialize_weights(self):
+        for m in self.modules():
+            t = type(m)
+            if t is nn.Conv2d:
+                pass  # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            elif t is nn.BatchNorm2d:
+                m.eps = 1e-3
+                m.momentum = 0.03
+            elif t in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
+                m.inplace = True
+
     def forward(self, x):
         # Normalize image values and convert to [-1, 1] range inside the network, to simplify deployment
         #image = (image - self.mean) / self.std
@@ -129,7 +143,13 @@ class MBotVisionModel(nn.Module):
         return x
 
     def deploy(self):
-        pass
+        # Fuse batchnorm layers
+        fuse_model(self)
+
+        # Fuse 3x3, 1x1 and identity layers
+        for layer in self.modules():
+            if hasattr(layer, 'switch_to_deploy'):
+                layer.switch_to_deploy()
 
 def create_model_cfg():
     cfg = Config.fromfile(os.path.join(os.path.dirname(__file__), 'yolov6/configs/yolov6p.py'))

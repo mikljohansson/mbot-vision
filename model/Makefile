@@ -8,7 +8,7 @@ EXPERIMENT ?= $(LOGGING_PATH)
 ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision no
 
 COCO_EPOCHS ?= 20
-COCO_BATCH_SIZE ?= 4
+COCO_BATCH_SIZE ?= 64
 
 REC_EPOCHS ?= 20
 REC_BATCH_SIZE ?= 4
