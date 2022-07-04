@@ -5,6 +5,7 @@
 #include "framerate.h"
 #include "common.h"
 #include "wiring.h"
+#include "datalog.h"
 
 FrameBufferQueue *fbqueue;
 static TaskHandle_t cameraTask;
@@ -127,7 +128,7 @@ void FrameBufferQueue::expire() {
     }
 }
 
-void cameraCaptureFrame(void *p) {
+void Camera::run() {
     // Initialize camera
     Serial.println("Init camera");
     while (true) {
@@ -148,15 +149,26 @@ void cameraCaptureFrame(void *p) {
         if (fb) {
             fbqueue->push(fb);
             framerate.tick();
+            
+            if (mv_camera_aithinker_config.pixel_format == PIXFORMAT_JPEG) {
+                _logger.logJpeg(fb->buf, fb->len);
+            }
         }
 
         yield();
     }
+}
 
+void Camera::runStatic(void *p) {
+    Camera *camera = (Camera *)p;
+    camera->run();
     vTaskDelete(NULL);
 }
 
-void cameraRun() {
+Camera::Camera(DataLogger &logger)
+ : _logger(logger) {}
+
+void Camera::begin() {
     fbqueue = new FrameBufferQueue();
-    xTaskCreatePinnedToCore(cameraCaptureFrame, "camera", 10000, NULL, 1, &cameraTask, 0);
+    xTaskCreatePinnedToCore(runStatic, "camera", 10000, this, 1, &cameraTask, 0);
 }

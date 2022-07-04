@@ -51,7 +51,7 @@ ObjectDetector::~ObjectDetector() {
     vSemaphoreDelete(_signal);
 }
 
-void ObjectDetector::start() {
+void ObjectDetector::begin() {
     tensor_arena = new uint8_t[kTensorArenaSize];
 
     tflite::InitializeTarget();

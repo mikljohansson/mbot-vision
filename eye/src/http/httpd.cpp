@@ -5,6 +5,7 @@
 #include "framerate.h"
 #include "detection/detector.h"
 #include "wiring.h"
+#include "common.h"
 
 #include "http/index.h"
 #include "http/jpeg-stream.h"
@@ -28,9 +29,11 @@ void handleFlash() {
     if (duty < MV_FLASH_MAX / 15) {
         duty = 0;
     }
-
-    Serial.println("Turning flash to value " + duty);
-    ledcWrite(MV_FLASH_CHAN, duty);
+    
+    if (!LOG_TO_SDCARD) {
+        Serial.println("Turning flash to value " + duty);
+        ledcWrite(MV_FLASH_CHAN, duty);
+    }
 
     server.send(200, "text/plain", "OK");
 }

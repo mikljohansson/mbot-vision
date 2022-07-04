@@ -5,7 +5,20 @@
 #include <esp_camera.h>
 #include <vector>
 
-void cameraRun();
+class DataLogger;
+
+class Camera {
+    private:
+        DataLogger &_logger;
+
+    public:
+        Camera(DataLogger &logger);
+        void begin();
+
+    private:
+        void run();
+        static void runStatic(void *);
+};
 
 class FrameBufferItem {
     public:

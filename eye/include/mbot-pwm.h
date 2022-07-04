@@ -14,7 +14,7 @@ class MBotPWM {
     public:
         MBotPWM(Detector &detector);
 
-        void start();
+        void begin();
 
     private:
         void run();

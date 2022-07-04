@@ -4,6 +4,8 @@
 #include <Arduino.h>
 #include <Adafruit_SSD1306.h>
 
+#define LOG_TO_SDCARD true
+
 extern Adafruit_SSD1306 oled;
 
 template <typename... T>
@@ -18,6 +20,10 @@ void serialPrint(const char *message, T... args) {
 
 template <typename... T>
 void oledPrint(const char *message, T... args) {
+    if (LOG_TO_SDCARD) {
+        return;
+    }
+    
     oled.clearDisplay();
     oled.setCursor(0, 0);
     

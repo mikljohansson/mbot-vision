@@ -79,7 +79,14 @@
 			"variant": "cpp",
 			"bit": "cpp",
 			"netfwd": "cpp",
-			"tjpgd.h": "c"
+			"tjpgd.h": "c",
+			"regex": "cpp",
+			"*.inc": "cpp",
+			"ranges": "cpp",
+			"span": "cpp",
+			"shared_mutex": "cpp",
+			"*.ipp": "cpp",
+			"stop_token": "cpp"
 		}
 	}
 }

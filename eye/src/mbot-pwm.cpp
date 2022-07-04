@@ -12,7 +12,7 @@
 MBotPWM::MBotPWM(Detector &detector)
  : _detector(detector) {}
 
-void MBotPWM::start() {
+void MBotPWM::begin() {
     xTaskCreatePinnedToCore(runStatic, "mbot-pwm", 10000, this, 1, &_task, 0);
 }
 

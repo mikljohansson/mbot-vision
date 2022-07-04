@@ -22,7 +22,7 @@ class ObjectDetector : public Detector {
         ObjectDetector();
         ~ObjectDetector();
 
-        void start();
+        void begin();
         DetectedObject wait();
         DetectedObject get();
         void draw(uint8_t *pixels, size_t width, size_t height);

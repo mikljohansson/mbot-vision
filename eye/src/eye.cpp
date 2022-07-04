@@ -10,6 +10,7 @@
 #include "http/httpd.h"
 #include "image/camera.h"
 #include "detection/objectdetector.h"
+#include "datalog.h"
 #include "wiring.h"
 #include "mbot-pwm.h"
 #include "common.h"
@@ -29,18 +30,23 @@ static const char *hostname = "mbot";
 Adafruit_SSD1306 oled(128, 32);
 static WiFiMulti wifiMulti;
 
+static DataLogger logger;
+static Camera camera(logger);
+
 //static BlobDetector detector({175, 60, 75});
 static ObjectDetector detector;
 
 static MBotPWM mbot(detector);
 
 void setup() {
-    pinMode(MV_LED_PIN, OUTPUT);
-    digitalWrite(MV_LED_PIN, LOW);
+    if (!LOG_TO_SDCARD) {
+        pinMode(MV_LED_PIN, OUTPUT);
+        digitalWrite(MV_LED_PIN, LOW);
 
-    ledcAttachPin(MV_FLASH_PIN, MV_FLASH_CHAN);
-    ledcSetup(MV_FLASH_CHAN, 151379, 8);
-    ledcWrite(MV_FLASH_CHAN, 0);
+        ledcAttachPin(MV_FLASH_PIN, MV_FLASH_CHAN);
+        ledcSetup(MV_FLASH_CHAN, 151379, 8);
+        ledcWrite(MV_FLASH_CHAN, 0);
+    }
 
     Serial.begin(115200);
     while (!Serial);
@@ -49,21 +55,31 @@ void setup() {
     serialPrint("Total heap: %d\n", ESP.getHeapSize());
     serialPrint("Total PSRAM: %d\n", ESP.getPsramSize());
     
+    // Initialize SD card
+    if (LOG_TO_SDCARD) {
+        Serial.println("Initializing memory card");
+        logger.begin();
+    }
+
     // Initialize display
-    Wire.setPins(MV_SDA_PIN, MV_SCL_PIN);
-    oled.begin();
-    oled.setTextColor(1);
-    oled.setTextSize(1);
+    if (!LOG_TO_SDCARD) {
+        Wire.setPins(MV_SDA_PIN, MV_SCL_PIN);
+        oled.begin();
+        oled.setTextColor(1);
+        oled.setTextSize(1);
+    }
     oledPrint("Starting up");
 
     // Start the camera frame capture task
-    cameraRun();
+    camera.begin();
 
     // Start object detector
-    detector.start();
+    detector.begin();
 
     // Connect to Mbot
-    mbot.start();
+    if (!LOG_TO_SDCARD) {
+        mbot.begin();
+    }
 
     // Connect to Wifi
     oledPrint("WiFi connecting");
@@ -103,13 +119,26 @@ void setup() {
     Serial.println(ret ? "Internet gateway was reachable" : "Not able to reach internet gateway");
     oledPrint("%s %s", WiFi.getHostname(), ip.toString().c_str());
 
+    // Use NTP to configure local time
+    Serial.print("Retrieving time: ");
+    configTime(0, 0, "pool.ntp.org");
+    time_t now = time(nullptr);
+    while (now < 24 * 3600) {
+        Serial.print(".");
+        delay(100);
+        now = time(nullptr);
+    }
+    Serial.println(now);
+
     // Start webserver
     httpdRun(detector);
 
-    digitalWrite(MV_LED_PIN, HIGH);
-    Serial.println("Setup complete");
+    if (!LOG_TO_SDCARD) {
+        digitalWrite(MV_LED_PIN, HIGH);
+        ledcWrite(MV_FLASH_CHAN, 0);
+    }
 
-    ledcWrite(MV_FLASH_CHAN, 0);
+    Serial.println("Setup complete");
 
     serialPrint("Startup completed\n");
     serialPrint("Free heap: %d\n", ESP.getFreeHeap());
