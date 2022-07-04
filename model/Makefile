@@ -9,9 +9,11 @@ ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --m
 
 COCO_EPOCHS ?= 20
 COCO_BATCH_SIZE ?= 64
+COCO_LEARNING_RATE ?= 1e-4
 
 REC_EPOCHS ?= 20
 REC_BATCH_SIZE ?= 4
+REC_LEARNING_RATE ?= 1e-4
 
 dataset/coco/train: src/coco.py src/image.py
 	mkdir -p dataset/coco/train
@@ -29,11 +31,13 @@ dataset: dataset/coco/train dataset/recorded/train
 
 $(EXPERIMENT)/coco.pth: dataset/coco/train
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) src/train.py -p $(PARALLEL) \
-		-t dataset/coco/train -o $@ --epochs $(COCO_EPOCHS) --batch-size $(COCO_BATCH_SIZE)
+		-t dataset/coco/train -o $@ --epochs $(COCO_EPOCHS) --batch-size $(COCO_BATCH_SIZE) \
+		--learning-rate $(COCO_LEARNING_RATE)
 
 $(EXPERIMENT)/recorded.pth: $(EXPERIMENT)/coco.pth dataset/recorded/train
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) src/train.py -p $(PARALLEL) \
-		-t dataset/recorded/train -m $< -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE)
+		-t dataset/recorded/train -m $< -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE) \
+		--learning-rate $(REC_LEARNING_RATE)
 
 $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
 	PYTHONPATH=. python src/convert.py -m $< -d dataset/recorded/train

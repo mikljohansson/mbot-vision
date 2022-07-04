@@ -1,5 +1,6 @@
 import os
 import glob
+import random
 
 import cv2
 import numpy as np
@@ -17,6 +18,8 @@ class ImageDataset(Dataset):
         self.target_size = target_size
 
         self.images = glob.glob(os.path.join(images_path, '*.png'))
+        random.shuffle(self.images)
+
         self.transforms = torch.nn.Sequential(
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.RandomPerspective(p=0.2),

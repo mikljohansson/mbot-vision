@@ -10,6 +10,7 @@ import torch.nn.functional as F
 import torchvision
 from accelerate import Accelerator
 from ranger21 import Ranger21
+from torch.utils.data import RandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
@@ -23,6 +24,7 @@ parser.add_argument('-m', '--model', type=str, help='Load pretrained weights fro
 parser.add_argument('-p', '--parallel', type=int, help='Number of worker processes', default=0)
 parser.add_argument('--epochs', type=int, help='Number of epochs', default=1)
 parser.add_argument('--batch-size', type=int, help='Batch size', default=4)
+parser.add_argument('--learning-rate', type=float, help='Learning rate', default=1e-3)
 parser.add_argument('--accumulation-steps', type=int, help='Gradient accumulation steps', default=1)
 args = parser.parse_args()
 
@@ -57,7 +59,7 @@ if args.model:
     model.load_state_dict(torch.load(args.model))
 
 optimizer = Ranger21(model.parameters(),
-                     lr=1e-3,
+                     lr=args.learning_rate,
                      num_epochs=args.epochs,
                      num_batches_per_epoch=(len(dataloader) / args.accumulation_steps))
 model, optimizer = accelerator.prepare(model, optimizer)
@@ -80,8 +82,8 @@ logger.info(f'  Total optimization steps {optimization_steps}')
 
 def normalize_loss(v):
     # Normalize loss in a logscale between 0 and 1
-    epsilon = 0.05
-    v = torch.log((v / (v.max() + epsilon)) * 10 + 1) / math.log(10 + 1)
+    epsilon = 0.1
+    v = torch.log((v / (v.max() + epsilon)) * 5 + 1) / math.log(5 + 1)
     return v.clamp(0, 1)
 
 
