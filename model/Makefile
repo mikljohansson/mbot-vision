@@ -1,4 +1,6 @@
-CLASSES = sports ball,apple,orange
+PRIMARY_CLASSES = sports ball
+SECONDARY_CLASSES = apple,orange
+CLASSES = $(PRIMARY_CLASSES),$(SECONDARY_CLASSES)
 
 PARALLEL ?= $(shell grep -c ^processor /proc/cpuinfo)
 GPU_COUNT ?= $(shell if [ "${CUDA_VISIBLE_DEVICES}" != "" ]; then echo "${CUDA_VISIBLE_DEVICES}" | tr "," " "| wc -w; else nvidia-smi --query-gpu=name --format=csv,noheader | grep -v -e '^$$' | wc -l; fi)
@@ -9,25 +11,26 @@ EXPERIMENT ?= $(LOGGING_PATH)
 
 ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision no
 
-# YOLOv6 trains with total batch size 64 for 2M optimization steps
+# YOLOv6 trains with total batch size 64-256 for 500k-2M optimization steps
 COCO_EPOCHS ?= 400
 COCO_BATCH_SIZE ?= 64
 COCO_LEARNING_RATE ?= 1e-4
+COCO_MODEL_PATH ?= $(EXPERIMENT)/coco.pth
 
 REC_EPOCHS ?= 1000
-REC_BATCH_SIZE ?= 4
+REC_BATCH_SIZE ?= 64
 REC_LEARNING_RATE ?= 5e-5
 
 dataset/coco/train: src/coco.py src/image.py
 	mkdir -p dataset/coco/train
 	touch dataset/coco/train
 	rm -f dataset/coco/train/*
-	PYTHONPATH=. python src/coco.py -c "sports ball" -e "orange,apple" -t dataset/coco/train
+	PYTHONPATH=. python src/coco.py -c "$(PRIMARY_CLASSES)" -e "$(SECONDARY_CLASSES)" -t dataset/coco/train
 
 # Extract 2 frames per second from a video
 dataset/recorded/frames/%_000001.jpg: dataset/recorded/videos/%.mp4
 	mkdir -p $(dir $@)
-	ffmpeg -i $< -r 2 $(dir $@)/$(basename $(notdir $<))_%06d.jpg
+	ffmpeg -i $< -r 4 $(dir $@)/$(basename $(notdir $<))_%06d.jpg
 
 # Extract frames from all videos
 dataset/recorded/frames: $(addprefix dataset/recorded/frames/,$(addsuffix _000001.jpg,$(basename $(notdir $(shell find dataset/recorded/videos -type f)))))
@@ -48,12 +51,12 @@ dataset/recorded/train: src/annotate.py src/image.py dataset/recorded/frames $(s
 
 dataset: dataset/coco/train dataset/recorded/train
 
-$(EXPERIMENT)/coco.pth: dataset/coco/train
+$(EXPERIMENT)/coco.pth:
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) src/train.py -p $(PARALLEL) \
 		-t dataset/coco/train -o $@ --epochs $(COCO_EPOCHS) --batch-size $(COCO_BATCH_SIZE) \
 		--learning-rate $(COCO_LEARNING_RATE)
 
-$(EXPERIMENT)/recorded.pth: $(EXPERIMENT)/coco.pth dataset/recorded/train
+$(EXPERIMENT)/recorded.pth: $(COCO_MODEL_PATH)
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) src/train.py -p $(PARALLEL) \
 		-t dataset/recorded/train -m $< -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE) \
 		--learning-rate $(REC_LEARNING_RATE)

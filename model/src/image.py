@@ -32,7 +32,7 @@ def get_input_box(mask, target_width, target_height):
     cropped_mask = mask[box[1]:box[3], box[0]:box[2]]
     target_ratio = np.sum(cropped_mask) / 255 / (width * height)
 
-    if target_ratio < 0.025 and mask.max() > 0:
+    if target_ratio < 0.01 and mask.max() > 0:
         # Find bounding box of mask
         left = max(0, min(x for x in range(width) if mask[:, x].max() != 0))
         right = min(width - 1, max(x for x in range(width) if mask[:, x].max() != 0) + 1)
