@@ -13,12 +13,12 @@ ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --m
 
 # YOLOv6 trains with total batch size 64-256 for 500k-2M optimization steps
 COCO_EPOCHS ?= 400
-COCO_BATCH_SIZE ?= 64
+COCO_BATCH_SIZE ?= 128
 COCO_LEARNING_RATE ?= 1e-4
 COCO_MODEL_PATH ?= $(EXPERIMENT)/coco.pth
 
 REC_EPOCHS ?= 1000
-REC_BATCH_SIZE ?= 64
+REC_BATCH_SIZE ?= 128
 REC_LEARNING_RATE ?= 5e-5
 
 dataset/coco/train: src/coco.py src/image.py
