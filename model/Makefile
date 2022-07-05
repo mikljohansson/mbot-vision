@@ -9,17 +9,19 @@ LOGGING_DIR ?= experiments/$(shell git rev-parse --abbrev-ref HEAD)
 LOGGING_PATH := $(shell echo "$(LOGGING_DIR)/`date +'%Y%m%d-%H%M%S'`")
 EXPERIMENT ?= $(LOGGING_PATH)
 
-ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision no
+ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision fp16
 
 # YOLOv6 trains with total batch size 64-256 for 500k-2M optimization steps (400 epochs) on COCO dataset (328k images, 80 classes)
 COCO_EPOCHS ?= 200
 COCO_BATCH_SIZE ?= 64
 COCO_LEARNING_RATE ?= 1e-4
+COCO_ACCUMULATION_STEPS ?= 1
 COCO_MODEL_PATH ?= $(EXPERIMENT)/coco.pth
 
-REC_EPOCHS ?= 1000
+REC_EPOCHS ?= 150
 REC_BATCH_SIZE ?= 64
-REC_LEARNING_RATE ?= 5e-5
+REC_LEARNING_RATE ?= 5e-4
+REC_ACCUMULATION_STEPS ?= 1
 
 dataset/coco/train: src/coco.py src/image.py
 	mkdir -p dataset/coco/train
@@ -52,15 +54,15 @@ dataset/recorded/train: src/annotate.py src/image.py dataset/recorded/frames $(s
 dataset: dataset/coco/train dataset/recorded/train
 
 $(EXPERIMENT)/coco.pth:
-	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) src/train.py -p $(PARALLEL) \
-		-t dataset/coco/train -o $@ --epochs $(COCO_EPOCHS) --batch-size $(COCO_BATCH_SIZE) \
-		--learning-rate $(COCO_LEARNING_RATE) --unknown-mask
+	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) --gradient_accumulation_steps $(COCO_ACCUMULATION_STEPS) \
+		src/train.py -t dataset/coco/train -o $@ -p $(PARALLEL) --epochs $(COCO_EPOCHS) --batch-size $(COCO_BATCH_SIZE) \
+		--learning-rate $(COCO_LEARNING_RATE) --accumulation-steps $(COCO_ACCUMULATION_STEPS) --unknown-mask
 
 $(EXPERIMENT)/recorded.pth:
 #$(COCO_MODEL_PATH)
-	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) src/train.py -p $(PARALLEL) \
-		-t dataset/recorded/train -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE) \
-		--learning-rate $(REC_LEARNING_RATE) --unknown-mask
+	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) --gradient_accumulation_steps $(REC_ACCUMULATION_STEPS) \
+		src/train.py -p $(PARALLEL) -t dataset/recorded/train -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE) \
+		--learning-rate $(REC_LEARNING_RATE) --accumulation-steps $(REC_ACCUMULATION_STEPS) --unknown-mask
 #-m $<
 
 $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth

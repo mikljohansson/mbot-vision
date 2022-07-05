@@ -39,13 +39,13 @@ for inputs, _, _ in dataloader:
     mask = mask.resize(image.size, resample=Image.Resampling.NEAREST)
     mask.save(os.path.join(os.path.dirname(args.torch_model), 'validation/%03d-torch.png' % image_count))
 
-    #inputs_tf = tf.convert_to_tensor((inputs * 255).numpy(), dtype=tf.uint8)
-    inputs_tf = tf.convert_to_tensor(inputs.numpy(), dtype=tf.float32)
+    inputs_tf = tf.convert_to_tensor((inputs * 255).numpy(), dtype=tf.uint8)
+    #inputs_tf = tf.convert_to_tensor(inputs.numpy(), dtype=tf.float32)
     results_tf = signature(input=inputs_tf)
 
     mask_tf = np.moveaxis(results_tf['output'][0], 0, 2)
-    #mask_tf = torchvision.transforms.functional.to_pil_image(mask_tf)
-    mask_tf = torchvision.transforms.functional.to_pil_image((mask_tf * 255).astype(np.uint8))
+    mask_tf = torchvision.transforms.functional.to_pil_image(mask_tf)
+    #mask_tf = torchvision.transforms.functional.to_pil_image((mask_tf * 255).astype(np.uint8))
     mask_tf = mask_tf.resize(image.size, resample=Image.Resampling.NEAREST)
     mask_tf.save(os.path.join(os.path.dirname(args.torch_model), 'validation/%03d-tflite.png' % image_count))
 
