@@ -3,6 +3,8 @@
 Use IntelliJ settings to make a new venv Python interpreter in u-2-net/venv
 
 ```
+sudo apt-get install ffmpeg
+
 . venv/bin/activate
 
 pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cu113

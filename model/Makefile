@@ -1,3 +1,5 @@
+CLASSES = sports ball,apple,orange
+
 PARALLEL ?= $(shell grep -c ^processor /proc/cpuinfo)
 GPU_COUNT ?= $(shell if [ "${CUDA_VISIBLE_DEVICES}" != "" ]; then echo "${CUDA_VISIBLE_DEVICES}" | tr "," " "| wc -w; else nvidia-smi --query-gpu=name --format=csv,noheader | grep -v -e '^$$' | wc -l; fi)
 
@@ -22,12 +24,27 @@ dataset/coco/train: src/coco.py src/image.py
 	rm -f dataset/coco/train/*
 	PYTHONPATH=. python src/coco.py -c "sports ball" -e "orange,apple" -t dataset/coco/train
 
-dataset/recorded/train: src/annotate.py src/image.py
+# Extract 2 frames per second from a video
+dataset/recorded/frames/%_000001.jpg: dataset/recorded/videos/%.mp4
+	mkdir -p $(dir $@)
+	ffmpeg -i $< -r 2 $(basename $@)_%06d.jpg
+
+# Extract frames from all videos
+dataset/recorded/frames: $(addprefix dataset/recorded/frames/,$(addsuffix _000001.jpg,$(basename $(notdir $(shell find dataset/recorded/videos -type f)))))
+	touch $(dir $@)
+
+# Annotate all images and frames
+dataset/recorded/train: src/annotate.py src/image.py $(shell find dataset/recorded/images -type f) $(shell find dataset/recorded/frames -type f)
 	mkdir -p dataset/recorded/annotated
 	mkdir -p dataset/recorded/train
+
+	PYTHONPATH=. python src/annotate.py -c "$(CLASSES)" \
+		-i dataset/recorded/images -a dataset/recorded/annotated -t dataset/recorded/train
+
+	PYTHONPATH=. python src/annotate.py -c "$(CLASSES)" \
+		-i dataset/recorded/frames -a dataset/recorded/annotated -t dataset/recorded/train
+
 	touch dataset/recorded/train
-	PYTHONPATH=. python src/annotate.py -c "sports ball,apple,orange" \
-		-i dataset/recorded/images -a dataset/recorded/annotated -t dataset/recorded/train \
 
 dataset: dataset/coco/train dataset/recorded/train
 
