@@ -11,7 +11,7 @@ EXPERIMENT ?= $(LOGGING_PATH)
 
 ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision no
 
-# YOLOv6 trains with total batch size 64-256 for 500k-2M optimization steps
+# YOLOv6 trains with total batch size 64-256 for 500k-2M optimization steps (400 epochs) on COCO dataset (328k images, 80 classes)
 COCO_EPOCHS ?= 200
 COCO_BATCH_SIZE ?= 64
 COCO_LEARNING_RATE ?= 1e-4
@@ -67,6 +67,9 @@ $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
 	PYTHONPATH=. python src/convert.py -m $< -d dataset/recorded/train
 
 train: $(EXPERIMENT)/recorded.tflite
+
+validate: $(EXPERIMENT)/recorded.pth $(EXPERIMENT)/recorded.tflite
+	PYTHONPATH=. python src/validate.py -m $(EXPERIMENT)/recorded.pth -t $(EXPERIMENT)/recorded.tflite -d dataset/recorded/train
 
 # Print a model summary
 summary:

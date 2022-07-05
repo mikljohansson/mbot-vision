@@ -1,6 +1,7 @@
 import argparse
 import os
 
+import numpy as np
 import torch
 import onnx
 import tensorflow as tf
@@ -48,7 +49,7 @@ def representative_dataset_gen():
     step = 0
     for inputs, _, _ in dataloader:
         # get sample input data as numpy array
-        yield [inputs.numpy()]
+        yield {'input': tf.dtypes.cast(inputs.numpy(), tf.float32)}
 
         step += 1
         if step >= num_calibration_steps:
@@ -56,10 +57,12 @@ def representative_dataset_gen():
 
 converter = tf.lite.TFLiteConverter.from_saved_model(tf_model_path)
 converter.optimizations = [tf.lite.Optimize.DEFAULT]
-converter.representative_dataset = representative_dataset_gen
-converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-converter.inference_input_type = tf.int8
-converter.inference_output_type = tf.int8
+converter.target_spec.supported_types = [tf.float16]
+
+#converter.representative_dataset = representative_dataset_gen
+#converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+#converter.inference_input_type = tf.uint8
+#converter.inference_output_type = tf.uint8
 
 tflite_model = converter.convert()
 

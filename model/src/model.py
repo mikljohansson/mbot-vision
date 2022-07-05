@@ -112,6 +112,8 @@ class MBotVisionModel(nn.Module):
         self.mean2x = torch.nn.Parameter(2. * torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1), requires_grad=False)
         self.std = torch.nn.Parameter(torch.tensor([0.229, 0.224, 0.225]).reshape(-1, 1, 1), requires_grad=False)
 
+        self.out = nn.Identity()
+
     def forward(self, x):
         # Normalize image values and convert to [-1, 1] range inside the network, to simplify deployment
         #image = (image - self.mean) / self.std
@@ -122,6 +124,7 @@ class MBotVisionModel(nn.Module):
         x = self.backbone(x)
         x = self.neck(x)
         x = self.head(x)
+        x = self.out(x)
         return x
 
     def deploy(self):
@@ -134,6 +137,9 @@ class MBotVisionModel(nn.Module):
                 print(f'Switching {layer} to deployment configuration')
                 layer.switch_to_deploy()
 
+        # Add the final sigmoid directly into the model
+        self.out = nn.Sigmoid()
+
 def create_model_cfg():
     cfg = Config.fromfile(os.path.join(os.path.dirname(__file__), 'yolov6/configs/yolov6p.py'))
     model = MBotVisionModel(cfg)
@@ -142,4 +148,3 @@ def create_model_cfg():
 def create_model():
     model, _ = create_model_cfg()
     return model
-
