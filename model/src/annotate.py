@@ -32,13 +32,18 @@ for i in range(0, len(files), args.batch_size):
         image = Image.fromarray(image, 'RGB') if isinstance(image, np.ndarray) else image
         mask = Image.new('L', image.size)
         draw = ImageDraw.Draw(mask)
+        found = False
 
         for *xyxy, confidence, clsid in predictions:
             classname = results.names[int(clsid)]
-            if classname not in labels_of_interest:
+            if classname not in labels_of_interest or confidence < 0.5:
                 continue
 
             draw.ellipse(((int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3]))), fill=255)
+            found = True
+
+        if not found:
+            continue
 
         box = get_input_box(np.asarray(mask, dtype=np.uint8), args.target_width, args.target_height)
         image = image.resize((args.target_width, args.target_height), box=box, resample=Image.Resampling.LANCZOS)

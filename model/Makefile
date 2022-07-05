@@ -27,14 +27,14 @@ dataset/coco/train: src/coco.py src/image.py
 # Extract 2 frames per second from a video
 dataset/recorded/frames/%_000001.jpg: dataset/recorded/videos/%.mp4
 	mkdir -p $(dir $@)
-	ffmpeg -i $< -r 2 $(basename $@)_%06d.jpg
+	ffmpeg -i $< -r 2 $(dir $@)/$(basename $(notdir $<))_%06d.jpg
 
 # Extract frames from all videos
 dataset/recorded/frames: $(addprefix dataset/recorded/frames/,$(addsuffix _000001.jpg,$(basename $(notdir $(shell find dataset/recorded/videos -type f)))))
 	touch $(dir $@)
 
 # Annotate all images and frames
-dataset/recorded/train: src/annotate.py src/image.py $(shell find dataset/recorded/images -type f) $(shell find dataset/recorded/frames -type f)
+dataset/recorded/train: src/annotate.py src/image.py dataset/recorded/frames $(shell find dataset/recorded/images -type f)
 	mkdir -p dataset/recorded/annotated
 	mkdir -p dataset/recorded/train
 
