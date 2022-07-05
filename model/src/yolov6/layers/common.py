@@ -243,6 +243,13 @@ class RepVGGBlock(nn.Module):
                                      padding=self.rbr_dense.conv.padding, dilation=self.rbr_dense.conv.dilation, groups=self.rbr_dense.conv.groups, bias=True)
         self.rbr_reparam.weight.data = kernel
         self.rbr_reparam.bias.data = bias
+
+        if self.groups > 1:
+            kernel, bias = self._fuse_bn_tensor(self.rbr_out)
+            self.rbr_out = nn.Conv2d(self.rbr_out.conv.in_channels, self.rbr_out.conv.out_channels, kernel_size=self.rbr_out.conv.kernel_size, bias=True)
+            self.rbr_out.weight.data = kernel
+            self.rbr_out.bias.data = bias
+
         for para in self.parameters():
             para.detach_()
         self.__delattr__('rbr_dense')

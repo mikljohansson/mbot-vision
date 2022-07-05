@@ -12,13 +12,13 @@ EXPERIMENT ?= $(LOGGING_PATH)
 ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision no
 
 # YOLOv6 trains with total batch size 64-256 for 500k-2M optimization steps
-COCO_EPOCHS ?= 400
-COCO_BATCH_SIZE ?= 128
+COCO_EPOCHS ?= 200
+COCO_BATCH_SIZE ?= 64
 COCO_LEARNING_RATE ?= 1e-4
 COCO_MODEL_PATH ?= $(EXPERIMENT)/coco.pth
 
 REC_EPOCHS ?= 1000
-REC_BATCH_SIZE ?= 128
+REC_BATCH_SIZE ?= 64
 REC_LEARNING_RATE ?= 5e-5
 
 dataset/coco/train: src/coco.py src/image.py
@@ -56,10 +56,12 @@ $(EXPERIMENT)/coco.pth:
 		-t dataset/coco/train -o $@ --epochs $(COCO_EPOCHS) --batch-size $(COCO_BATCH_SIZE) \
 		--learning-rate $(COCO_LEARNING_RATE) --unknown-mask
 
-$(EXPERIMENT)/recorded.pth: $(COCO_MODEL_PATH)
+$(EXPERIMENT)/recorded.pth:
+#$(COCO_MODEL_PATH)
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) src/train.py -p $(PARALLEL) \
-		-t dataset/recorded/train -m $< -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE) \
+		-t dataset/recorded/train -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE) \
 		--learning-rate $(REC_LEARNING_RATE) --unknown-mask
+#-m $<
 
 $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
 	PYTHONPATH=. python src/convert.py -m $< -d dataset/recorded/train
