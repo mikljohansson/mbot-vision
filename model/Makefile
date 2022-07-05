@@ -54,12 +54,12 @@ dataset: dataset/coco/train dataset/recorded/train
 $(EXPERIMENT)/coco.pth:
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) src/train.py -p $(PARALLEL) \
 		-t dataset/coco/train -o $@ --epochs $(COCO_EPOCHS) --batch-size $(COCO_BATCH_SIZE) \
-		--learning-rate $(COCO_LEARNING_RATE)
+		--learning-rate $(COCO_LEARNING_RATE) --unknown-mask
 
 $(EXPERIMENT)/recorded.pth: $(COCO_MODEL_PATH)
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) src/train.py -p $(PARALLEL) \
 		-t dataset/recorded/train -m $< -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE) \
-		--learning-rate $(REC_LEARNING_RATE)
+		--learning-rate $(REC_LEARNING_RATE) --unknown-mask
 
 $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
 	PYTHONPATH=. python src/convert.py -m $< -d dataset/recorded/train

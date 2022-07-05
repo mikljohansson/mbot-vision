@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
 
+import math
 import warnings
 from pathlib import Path
 
@@ -11,15 +12,8 @@ import torch.nn.functional as F
 from src.yolov6.layers.dbb_transforms import *
 
 
-class SiLU(nn.Module):
-    '''Activation of SiLU'''
-    @staticmethod
-    def forward(x):
-        return x * torch.sigmoid(x)
-
-
 class Conv(nn.Module):
-    '''Normal Conv with SiLU activation'''
+    '''Normal Conv with Mish activation'''
     def __init__(self, in_channels, out_channels, kernel_size, stride, groups=1, bias=False):
         super().__init__()
         padding = kernel_size // 2
@@ -33,7 +27,7 @@ class Conv(nn.Module):
             bias=bias,
         )
         self.bn = nn.BatchNorm2d(out_channels)
-        self.act = nn.SiLU()
+        self.act = nn.Mish(inplace=True)
 
     def forward(self, x):
         return self.act(self.bn(self.conv(x)))
@@ -43,7 +37,7 @@ class Conv(nn.Module):
 
 
 class SimConv(nn.Module):
-    '''Normal Conv with ReLU activation'''
+    '''Normal Conv with Mish activation'''
     def __init__(self, in_channels, out_channels, kernel_size, stride, groups=1, bias=False):
         super().__init__()
         padding = kernel_size // 2
@@ -57,7 +51,7 @@ class SimConv(nn.Module):
             bias=bias,
         )
         self.bn = nn.BatchNorm2d(out_channels)
-        self.act = nn.ReLU()
+        self.act = nn.Mish(inplace=True)
 
     def forward(self, x):
         return self.act(self.bn(self.conv(x)))
@@ -67,7 +61,7 @@ class SimConv(nn.Module):
 
 
 class SimSPPF(nn.Module):
-    '''Simplified SPPF with ReLU activation'''
+    '''Simplified SPPF with Mish activation'''
     def __init__(self, in_channels, out_channels, kernel_size=5):
         super().__init__()
         c_ = in_channels // 2  # hidden channels
@@ -134,12 +128,16 @@ class RepBlock(nn.Module):
         return x
 
 
+def closest_power2(x):
+    return max(1, int(2 ** round(math.log(x, 2))))
+
+
 class RepVGGBlock(nn.Module):
     '''RepVGGBlock is a basic rep-style block, including training and deploy status
     This code is based on https://github.com/DingXiaoH/RepVGG/blob/main/repvgg.py
     '''
     def __init__(self, in_channels, out_channels, kernel_size=3,
-                 stride=1, padding=1, dilation=1, groups=1, padding_mode='zeros', deploy=False, use_se=False):
+                 stride=1, padding=1, dilation=1, groups=None, padding_mode='zeros', deploy=False, use_se=False):
         super(RepVGGBlock, self).__init__()
         """ Initialization of the class.
         Args:
@@ -157,7 +155,7 @@ class RepVGGBlock(nn.Module):
             use_se: Whether to use se. Default: False
         """
         self.deploy = deploy
-        self.groups = groups
+        self.groups = groups if groups is not None else closest_power2(min(in_channels, out_channels) / 4)
         self.in_channels = in_channels
         self.out_channels = out_channels
 
@@ -166,7 +164,7 @@ class RepVGGBlock(nn.Module):
 
         padding_11 = padding - kernel_size // 2
 
-        self.nonlinearity = nn.ReLU()
+        self.nonlinearity = nn.Mish(inplace=True)
 
         if use_se:
             raise NotImplementedError("se block not supported yet")
@@ -175,24 +173,26 @@ class RepVGGBlock(nn.Module):
 
         if deploy:
             self.rbr_reparam = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride,
-                                         padding=padding, dilation=dilation, groups=groups, bias=True, padding_mode=padding_mode)
+                                         padding=padding, dilation=dilation, groups=self.groups, bias=True, padding_mode=padding_mode)
 
         else:
             self.rbr_identity = nn.BatchNorm2d(num_features=in_channels) if out_channels == in_channels and stride == 1 else None
-            self.rbr_dense = conv_bn(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride, padding=padding, groups=groups)
-            self.rbr_1x1 = conv_bn(in_channels=in_channels, out_channels=out_channels, kernel_size=1, stride=stride, padding=padding_11, groups=groups)
+            self.rbr_dense = conv_bn(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride, padding=padding, groups=self.groups)
+            self.rbr_1x1 = conv_bn(in_channels=in_channels, out_channels=out_channels, kernel_size=1, stride=stride, padding=padding_11, groups=self.groups)
+
+        self.rbr_out = conv_bn(in_channels=out_channels, out_channels=out_channels, kernel_size=1, stride=1, padding=0) if self.groups > 1 else nn.Identity()
 
     def forward(self, inputs):
         '''Forward process'''
         if hasattr(self, 'rbr_reparam'):
-            return self.nonlinearity(self.se(self.rbr_reparam(inputs)))
+            return self.nonlinearity(self.se(self.rbr_out(self.rbr_reparam(inputs))))
 
         if self.rbr_identity is None:
             id_out = 0
         else:
             id_out = self.rbr_identity(inputs)
 
-        return self.nonlinearity(self.se(self.rbr_dense(inputs) + self.rbr_1x1(inputs) + id_out))
+        return self.nonlinearity(self.se(self.rbr_out(self.rbr_dense(inputs) + self.rbr_1x1(inputs) + id_out)))
 
     def get_equivalent_kernel_bias(self):
         kernel3x3, bias3x3 = self._fuse_bn_tensor(self.rbr_dense)
@@ -357,7 +357,7 @@ class DiverseBranchBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3,
                  stride=1, padding=1, dilation=1, groups=1,
                  internal_channels_1x1_3x3=None,
-                 deploy=False, nonlinear=nn.ReLU(), single_init=False):
+                 deploy=False, nonlinear=nn.Mish(inplace=True), single_init=False):
         super(DiverseBranchBlock, self).__init__()
         self.deploy = deploy
 

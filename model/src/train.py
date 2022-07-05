@@ -26,6 +26,7 @@ parser.add_argument('--epochs', type=int, help='Number of epochs', default=1)
 parser.add_argument('--batch-size', type=int, help='Batch size', default=4)
 parser.add_argument('--learning-rate', type=float, help='Learning rate', default=1e-3)
 parser.add_argument('--accumulation-steps', type=int, help='Gradient accumulation steps', default=1)
+parser.add_argument('--unknown-mask', action='store_true', help='Don\'t apply loss for unknown mask', default=False)
 args = parser.parse_args()
 
 output_dir = os.path.dirname(args.output)
@@ -99,9 +100,13 @@ def upsample_like(t, like, mode='bilinear'):
     return t
 
 
-def calculate_loss(outputs, targets, unknown_mask, z_loss=1e-5):
+def calculate_loss(outputs, targets, unknown_mask, z_loss=1e-6):
     alpha_loss = F.binary_cross_entropy_with_logits(outputs, targets, reduction='none')
-    loss = (alpha_loss * (1. - unknown_mask)).mean()
+
+    if args.unknown_mask:
+        loss = (alpha_loss * (1. - unknown_mask)).mean()
+    else:
+        loss = alpha_loss.mean()
 
     # Add a separate loss to keep the logits from drifting too far from zero and encourage the
     # logits to be normalized log-probabilities. This might also help prevent NaN's

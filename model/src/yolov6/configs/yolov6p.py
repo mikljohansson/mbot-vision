@@ -7,12 +7,12 @@ model = dict(
     backbone=dict(
         type='EfficientRep',
         num_repeats=[1, 6, 12, 18, 6],
-        out_channels=[64, 128, 256, 512, 1024],
+        out_channels=[32, 32, 64, 128, 256],
         ),
     neck=dict(
         type='RepPAN',
         num_repeats=[12, 12, 12, 12],
-        out_channels=[256, 128, 128, 256, 256, 512],
+        out_channels=[128, 64, 64, 128, 128, 256],
         ),
 )
 

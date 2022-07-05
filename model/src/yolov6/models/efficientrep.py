@@ -26,19 +26,19 @@ class EfficientRep(nn.Module):
             stride=1
         )
 
-        self.ERBlock_2 = nn.Sequential(
-            RepVGGBlock(
-                in_channels=channels_list[0],
-                out_channels=channels_list[1],
-                kernel_size=3,
-                stride=1
-            ),
-            RepBlock(
-                in_channels=channels_list[1],
-                out_channels=channels_list[1],
-                n=num_repeats[1]
-            )
-        )
+        # self.ERBlock_2 = nn.Sequential(
+        #     RepVGGBlock(
+        #         in_channels=channels_list[0],
+        #         out_channels=channels_list[1],
+        #         kernel_size=3,
+        #         stride=1
+        #     ),
+        #     RepBlock(
+        #         in_channels=channels_list[1],
+        #         out_channels=channels_list[1],
+        #         n=num_repeats[1]
+        #     )
+        # )
 
         self.ERBlock_3 = nn.Sequential(
             RepVGGBlock(
@@ -91,7 +91,7 @@ class EfficientRep(nn.Module):
 
         outputs = []
         x = self.stem(x)
-        x = self.ERBlock_2(x)
+        #x = self.ERBlock_2(x)
         x = self.ERBlock_3(x)
         outputs.append(x)
         x = self.ERBlock_4(x)

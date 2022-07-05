@@ -36,31 +36,35 @@ class SegmentationHead(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.in1 = nn.Identity()
+        self.in1 = nn.Sequential(
+            nn.GroupNorm(8, 16),
+        )
 
         self.in2 = nn.Sequential(
-            nn.Conv2d(64, 32, kernel_size=3, padding=1),
             UpsampleInterpolate2d(),
+            nn.Conv2d(32, 16, kernel_size=3, padding=1, groups=16, bias=False),
+            nn.GroupNorm(8, 16),
         )
 
         self.in3 = nn.Sequential(
-            nn.Conv2d(128, 64, kernel_size=3, padding=1),
             UpsampleInterpolate2d(),
-            nn.Conv2d(64, 32, kernel_size=3, padding=1),
+            nn.Conv2d(64, 32, kernel_size=3, padding=1, groups=32, bias=False),
+            nn.GroupNorm(8, 32),
             UpsampleInterpolate2d(),
+            nn.Conv2d(32, 16, kernel_size=3, padding=1, groups=16, bias=False),
+            nn.GroupNorm(8, 16),
         )
 
         self.fuse = nn.Sequential(
-            nn.Conv2d(96, 32, kernel_size=3, padding=1),
+            nn.Conv2d(48, 16, kernel_size=1),
             ResidualBlock(
-                nn.Conv2d(32, 32, kernel_size=3, padding=1, groups=32),
-                nn.GroupNorm(8, 32),
-                nn.Conv2d(32, 128, kernel_size=1),
-                nn.SiLU(),
-                nn.Conv2d(128, 32, kernel_size=1),
+                nn.Conv2d(16, 16, kernel_size=3, padding=1, groups=16, bias=False),
+                nn.GroupNorm(8, 16),
+                nn.Conv2d(16, 64, kernel_size=1),
+                nn.Mish(inplace=True),
+                nn.Conv2d(64, 16, kernel_size=1),
             ),
-            nn.SiLU(),
-            nn.Conv2d(32, 1, kernel_size=1),
+            nn.Conv2d(16, 1, kernel_size=1),
         )
 
     def forward(self, x):
