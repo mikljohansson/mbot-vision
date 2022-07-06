@@ -51,13 +51,13 @@ logger.info(accelerator.state)
 
 model, cfg = create_model_cfg()
 
-dataset = ImageDataset(args.train, target_size=cfg.model.output_size)
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.parallel)
-dataloader = accelerator.prepare(dataloader)
-
 if args.model:
     logger.info(f'Loading pretrained weights from {args.model}')
     model.load_state_dict(torch.load(args.model))
+
+dataset = ImageDataset(args.train, target_size=cfg.model.output_size)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.parallel)
+dataloader = accelerator.prepare(dataloader)
 
 optimizer = Ranger21(model.parameters(),
                      lr=args.learning_rate,
@@ -131,6 +131,7 @@ for epoch in range(args.epochs):
 
         if step % args.accumulation_steps == 0 or step == len(dataloader) - 1:
             optimizer.step()
+            optimizer.zero_grad()
             pbar.update(1)
 
         writer.add_scalar(f'{model_name}/loss', loss, step)
