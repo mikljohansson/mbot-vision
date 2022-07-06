@@ -58,7 +58,7 @@ class SimConv(nn.Module):
             bias=bias,
         )
         self.bn = nn.BatchNorm2d(out_channels)
-        self.act = nn.ReLU()
+        self.act = nn.ReLU(inplace=True)
 
     def forward(self, x):
         return self.act(self.bn(self.conv(x)))
@@ -171,7 +171,7 @@ class RepVGGBlock(nn.Module):
 
         padding_11 = padding - kernel_size // 2
 
-        self.nonlinearity = nn.ReLU()
+        self.nonlinearity = nn.ReLU(inplace=True)
 
         if use_se:
             raise NotImplementedError("se block not supported yet")
@@ -371,7 +371,7 @@ class DiverseBranchBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3,
                  stride=1, padding=1, dilation=1, groups=1,
                  internal_channels_1x1_3x3=None,
-                 deploy=False, nonlinear=nn.ReLU(), single_init=False):
+                 deploy=False, nonlinear=nn.ReLU(inplace=True), single_init=False):
         super(DiverseBranchBlock, self).__init__()
         self.deploy = deploy
 

@@ -61,7 +61,7 @@ class SegmentationHead(nn.Module):
                 nn.Conv2d(16, 16, kernel_size=3, padding=1, groups=16, bias=False),
                 nn.GroupNorm(8, 16),
                 nn.Conv2d(16, 64, kernel_size=1),
-                nn.Mish(),
+                nn.ReLU(inplace=True),
                 nn.Conv2d(64, 16, kernel_size=1),
             ),
             nn.Conv2d(16, 1, kernel_size=1),
