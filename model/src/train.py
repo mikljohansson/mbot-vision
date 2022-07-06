@@ -4,6 +4,7 @@ import os
 import time
 import math
 
+import numpy as np
 import psutil
 import torch
 import torch.nn.functional as F
@@ -16,6 +17,7 @@ from tqdm import tqdm
 
 from src.dataset import ImageDataset
 from src.model import create_model_cfg
+from src.yolov6.solver.build import build_optimizer, build_lr_scheduler
 
 parser = argparse.ArgumentParser(description='Summarize adcopy')
 parser.add_argument("-o", "--output", type=str, required=True, help="File to write model pth")
@@ -59,14 +61,52 @@ if args.model:
     logger.info(f'Loading pretrained weights from {args.model}')
     model.load_state_dict(torch.load(args.model))
 
-optimizer = Ranger21(model.parameters(),
-                     lr=args.learning_rate,
-                     num_epochs=args.epochs,
-                     num_batches_per_epoch=(len(dataloader) / args.accumulation_steps))
-model, optimizer = accelerator.prepare(model, optimizer)
+def get_optimizer(cfg, model):
+    accumulate = args.accumulation_steps
+    cfg.solver.weight_decay *= args.batch_size * accumulate / 64
+    optimizer = build_optimizer(cfg, model)
+    return optimizer
+
+def get_lr_scheduler(cfg, optimizer):
+    epochs = args.epochs
+    lr_scheduler, lf = build_lr_scheduler(cfg, optimizer, epochs)
+    return lr_scheduler, lf
+
+optimizer = get_optimizer(cfg, model)
+lr_scheduler, lf = get_lr_scheduler(cfg, optimizer)
+lr_scheduler.last_epoch = -1    # start_epoch - 1
+
+epoch = 0
 
 optimization_steps = int(len(dataloader) * args.epochs / args.accumulation_steps)
-cuda_available = torch.cuda.is_available()
+warmup_steps = max(round(len(dataloader) * cfg.solver.warmup_epochs), 1000)
+last_opt_step = -1
+step = 0
+
+pbar = tqdm(total=optimization_steps, unit=' steps', disable=not accelerator.is_local_main_process)
+
+def update_optimizer():
+    global last_opt_step
+
+    # Use lower per parameter lr and momentum during warmup
+    if step <= warmup_steps:
+        for k, param in enumerate(optimizer.param_groups):
+            warmup_bias_lr = cfg.solver.warmup_bias_lr if k == 2 else 0.0
+            param['lr'] = np.interp(step, [0, warmup_steps], [warmup_bias_lr, param['initial_lr'] * lf(epoch)])
+            if 'momentum' in param:
+                param['momentum'] = np.interp(step, [0, warmup_steps], [cfg.solver.warmup_momentum, cfg.solver.momentum])
+
+    if step - last_opt_step >= args.accumulation_steps:
+        optimizer.step()
+        optimizer.zero_grad()
+        pbar.update(1)
+        last_opt_step = step
+
+# optimizer = Ranger21(model.parameters(),
+#                      lr=args.learning_rate,
+#                      num_epochs=args.epochs,
+#                      num_batches_per_epoch=(len(dataloader) / args.accumulation_steps))
+model, optimizer, lr_scheduler = accelerator.prepare(model, optimizer, lr_scheduler)
 
 # Tensorboard output
 logger.info(f'Results will be saved in {output_dir}')
@@ -117,9 +157,8 @@ def calculate_loss(outputs, targets, unknown_mask, z_loss=1e-5):
     return loss, alpha_loss, z
 
 
-step = 0
 last_logged_image = 0
-pbar = tqdm(total=optimization_steps, unit=' steps', disable=not accelerator.is_local_main_process)
+cuda_available = torch.cuda.is_available()
 
 for epoch in range(args.epochs):
     for inputs, targets, unknown_mask in dataloader:
@@ -129,9 +168,7 @@ for epoch in range(args.epochs):
         accelerator.backward(loss)
         step += 1
 
-        if step % args.accumulation_steps == 0 or step == len(dataloader) - 1:
-            optimizer.step()
-            pbar.update(1)
+        update_optimizer()
 
         writer.add_scalar(f'{model_name}/loss', loss, step)
         writer.add_scalar(f'{model_name}/z_loss', z_loss, step)
@@ -164,6 +201,8 @@ for epoch in range(args.epochs):
             ]
 
             writer.add_image(f'{model_name}/sample', torchvision.utils.make_grid(cells, nrow=3), step)
+
+    lr_scheduler.step()
 
 pbar.close()
 
