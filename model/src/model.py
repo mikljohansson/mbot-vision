@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from src.yolov6.models.efficientrep import EfficientRep
 from src.yolov6.models.reppan import RepPANNeck
 from src.yolov6.utils.config import Config
-from src.yolov6.utils.torch_utils import fuse_model, fuse_conv_and_bn
+from src.yolov6.utils.torch_utils import fuse_model, fuse_conv_and_bn, initialize_weights
 
 
 def make_divisible(x, divisor):
@@ -61,7 +61,7 @@ class SegmentationHead(nn.Module):
                 nn.Conv2d(16, 16, kernel_size=3, padding=1, groups=16, bias=False),
                 nn.GroupNorm(8, 16),
                 nn.Conv2d(16, 64, kernel_size=1),
-                nn.Mish(inplace=True),
+                nn.Mish(),
                 nn.Conv2d(64, 16, kernel_size=1),
             ),
             nn.Conv2d(16, 1, kernel_size=1),
@@ -114,6 +114,8 @@ class MBotVisionModel(nn.Module):
 
         self.out = nn.Identity()
 
+        #initialize_weights(self)
+
     def forward(self, x):
         # Normalize image values and convert to [-1, 1] range inside the network, to simplify deployment
         #image = (image - self.mean) / self.std
@@ -134,7 +136,7 @@ class MBotVisionModel(nn.Module):
         # Fuse 3x3, 1x1 and identity layers
         for layer in self.modules():
             if hasattr(layer, 'switch_to_deploy'):
-                print(f'Switching {layer} to deployment configuration')
+                print(f'Switching {type(layer)} to deployment configuration')
                 layer.switch_to_deploy()
 
         # Add the final sigmoid directly into the model

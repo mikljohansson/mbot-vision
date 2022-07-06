@@ -14,14 +14,16 @@ ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --m
 # YOLOv6 trains with total batch size 64-256 for 500k-2M optimization steps (400 epochs) on COCO dataset (328k images, 80 classes)
 COCO_EPOCHS ?= 200
 COCO_BATCH_SIZE ?= 64
-COCO_LEARNING_RATE ?= 1e-4
 COCO_ACCUMULATION_STEPS ?= 1
 COCO_MODEL_PATH ?= $(EXPERIMENT)/coco.pth
 
 REC_EPOCHS ?= 150
 REC_BATCH_SIZE ?= 64
-REC_LEARNING_RATE ?= 5e-4
 REC_ACCUMULATION_STEPS ?= 1
+
+# Need to use a really low learning rate to avoid the "dying ReLU problem". It manifests as the loss sharply flat-lining and the network stops learning
+COCO_LEARNING_RATE ?= 5e-5
+REC_LEARNING_RATE ?= 1e-4
 
 dataset/coco/train: src/coco.py src/image.py
 	mkdir -p dataset/coco/train

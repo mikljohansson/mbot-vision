@@ -12,32 +12,8 @@ import torch.nn.functional as F
 from src.yolov6.layers.dbb_transforms import *
 
 
-class Conv(nn.Module):
-    '''Normal Conv with Mish activation'''
-    def __init__(self, in_channels, out_channels, kernel_size, stride, groups=1, bias=False):
-        super().__init__()
-        padding = kernel_size // 2
-        self.conv = nn.Conv2d(
-            in_channels,
-            out_channels,
-            kernel_size=kernel_size,
-            stride=stride,
-            padding=padding,
-            groups=groups,
-            bias=bias,
-        )
-        self.bn = nn.BatchNorm2d(out_channels)
-        self.act = nn.Mish(inplace=True)
-
-    def forward(self, x):
-        return self.act(self.bn(self.conv(x)))
-
-    def forward_fuse(self, x):
-        return self.act(self.conv(x))
-
-
 class SimConv(nn.Module):
-    '''Normal Conv with Mish activation'''
+    '''Normal Conv with activation'''
     def __init__(self, in_channels, out_channels, kernel_size, stride, groups=1, bias=False):
         super().__init__()
         padding = kernel_size // 2
@@ -51,7 +27,7 @@ class SimConv(nn.Module):
             bias=bias,
         )
         self.bn = nn.BatchNorm2d(out_channels)
-        self.act = nn.Mish(inplace=True)
+        self.act = nn.Mish()
 
     def forward(self, x):
         return self.act(self.bn(self.conv(x)))
@@ -61,7 +37,7 @@ class SimConv(nn.Module):
 
 
 class SimSPPF(nn.Module):
-    '''Simplified SPPF with Mish activation'''
+    '''Simplified SPPF with activation'''
     def __init__(self, in_channels, out_channels, kernel_size=5):
         super().__init__()
         c_ = in_channels // 2  # hidden channels
@@ -164,7 +140,7 @@ class RepVGGBlock(nn.Module):
 
         padding_11 = padding - kernel_size // 2
 
-        self.nonlinearity = nn.Mish(inplace=True)
+        self.nonlinearity = nn.Mish()
 
         if use_se:
             raise NotImplementedError("se block not supported yet")
@@ -364,7 +340,7 @@ class DiverseBranchBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3,
                  stride=1, padding=1, dilation=1, groups=1,
                  internal_channels_1x1_3x3=None,
-                 deploy=False, nonlinear=nn.Mish(inplace=True), single_init=False):
+                 deploy=False, nonlinear=nn.Mish(), single_init=False):
         super(DiverseBranchBlock, self).__init__()
         self.deploy = deploy
 
