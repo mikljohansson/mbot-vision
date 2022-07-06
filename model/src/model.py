@@ -114,7 +114,7 @@ class MBotVisionModel(nn.Module):
 
         self.out = nn.Identity()
 
-        #initialize_weights(self)
+        initialize_weights(self)
 
     def forward(self, x):
         # Normalize image values and convert to [-1, 1] range inside the network, to simplify deployment

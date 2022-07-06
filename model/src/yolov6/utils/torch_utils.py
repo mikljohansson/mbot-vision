@@ -82,10 +82,10 @@ def fuse_conv_and_bn(conv, bn):
 
 
 def fuse_model(model):
-    from src.yolov6.layers.common import SimConv
+    from src.yolov6.layers.common import Conv, SimConv
 
     for m in model.modules():
-        if type(m) is SimConv and hasattr(m, "bn"):
+        if (type(m) is Conv or type(m) is SimConv) and hasattr(m, "bn"):
             print(f'Switching {type(m)} to deployment configuration')
             m.conv = fuse_conv_and_bn(m.conv, m.bn)  # update conv
             delattr(m, "bn")  # remove batchnorm
