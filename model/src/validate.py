@@ -8,7 +8,7 @@ import torchvision.transforms.functional
 from PIL import Image
 
 from src.dataset import ImageDataset
-from src.model import create_model_cfg
+from src.model import create_model
 
 parser = argparse.ArgumentParser(description='Summarize adcopy')
 parser.add_argument("-m", "--torch-model", required=True, help="Input model in .pth format")
@@ -16,8 +16,9 @@ parser.add_argument("-t", "--tflite-model", required=True, help="Input model in 
 parser.add_argument("-d", "--dataset", required=True, help="Directory of sample images")
 args = parser.parse_args()
 
-model, cfg = create_model_cfg()
-model.load_state_dict(torch.load(args.torch_model))
+checkpoint = torch.load(args.torch_model)
+model, cfg = create_model()
+model.load_state_dict(checkpoint['state'])
 model.deploy()
 model.eval()
 

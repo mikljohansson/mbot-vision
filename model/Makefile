@@ -11,6 +11,10 @@ EXPERIMENT ?= $(LOGGING_PATH)
 
 ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision fp16
 
+#MODEL ?= yolov6p
+MODEL ?= mobilenet_v3_small
+DEPLOY ?= no
+
 # Model input and output dimensions
 INPUT_WIDTH	= 160
 INPUT_HEIGHT = 120
@@ -63,15 +67,15 @@ dataset: dataset/coco/train dataset/recorded/train
 
 $(EXPERIMENT)/coco.pth:
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) --gradient_accumulation_steps $(COCO_ACCUMULATION_STEPS) \
-		src/train.py -t dataset/coco/train -o $@ -p $(PARALLEL) --epochs $(COCO_EPOCHS) --batch-size $(COCO_BATCH_SIZE) \
+		src/train.py -m $(MODEL) -t dataset/coco/train -o $@ -p $(PARALLEL) --epochs $(COCO_EPOCHS) --batch-size $(COCO_BATCH_SIZE) \
 		--learning-rate $(COCO_LEARNING_RATE) --accumulation-steps $(COCO_ACCUMULATION_STEPS) --unknown-mask
 
 $(EXPERIMENT)/recorded.pth:
 #$(COCO_MODEL_PATH)
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) --gradient_accumulation_steps $(REC_ACCUMULATION_STEPS) \
-		src/train.py -p $(PARALLEL) -t dataset/recorded/train -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE) \
+		src/train.py -m $(MODEL) -p $(PARALLEL) -t dataset/recorded/train -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE) \
 		--learning-rate $(REC_LEARNING_RATE) --accumulation-steps $(REC_ACCUMULATION_STEPS) --unknown-mask
-#-m $<
+#--resume $<
 
 $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
 	PYTHONPATH=. python src/convert.py -m $< -d dataset/recorded/train
@@ -93,11 +97,12 @@ output/mbot-vision-model.cpp: $(EXPERIMENT)/recorded.tflite
 train: output/mbot-vision-model.cpp
 
 validate: $(EXPERIMENT)/recorded.pth $(EXPERIMENT)/recorded.tflite
-	PYTHONPATH=. python src/validate.py -m $(EXPERIMENT)/recorded.pth -t $(EXPERIMENT)/recorded.tflite -d dataset/recorded/train
+	PYTHONPATH=. python src/validate.py -d dataset/recorded/train \
+		-m $(EXPERIMENT)/recorded.pth -t $(EXPERIMENT)/recorded.tflite
 
 # Print a model summary
 summary:
-	CUDA_VISIBLE_DEVICES= PYTHONPATH=. python src/summary.py
+	CUDA_VISIBLE_DEVICES= PYTHONPATH=. python src/summary.py -m $(MODEL) $(shell if [ "$(DEPLOY)" != "no" ]; then echo "-d"; fi)
 
 # Start tensorboard in the background
 tensorboard:

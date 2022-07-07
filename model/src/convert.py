@@ -8,7 +8,7 @@ import tensorflow as tf
 from onnx_tf.backend import prepare
 
 from src.dataset import ImageDataset
-from src.model import create_model_cfg
+from src.model import create_model
 
 # See https://github.com/sithu31296/PyTorch-ONNX-TFLite
 
@@ -17,8 +17,9 @@ parser.add_argument("-m", "--model", type=str, default=None, help="Input model i
 parser.add_argument("-d", "--dataset", required=True, help="Directory of sample images")
 args = parser.parse_args()
 
-model, cfg = create_model_cfg()
-model.load_state_dict(torch.load(args.model))
+checkpoint = torch.load(args.model)
+model, cfg = create_model()
+model.load_state_dict(checkpoint['state'])
 model.deploy()
 model.eval()
 

@@ -1,19 +1,13 @@
+from torchvision.models.mobilenet import mobilenet_v3_small
+
+from src.models.mobilenet import MobileNetModel
+
 model = dict(
-    type='YOLOv6p',
-    pretrained=None,
-    output_size=(80, 60),   # WxH
-    depth_multiple=0.33,
-    width_multiple=0.25,
-    backbone=dict(
-        type='EfficientRep',
-        num_repeats=[1, 6, 12, 18, 6],
-        out_channels=[32, 32, 64, 128, 256],
-        ),
-    neck=dict(
-        type='RepPAN',
-        num_repeats=[12, 12, 12, 12],
-        out_channels=[128, 64, 64, 128, 128, 256],
-        ),
+    type=MobileNetModel,
+    backbone=mobilenet_v3_small,
+    pretrained=True,
+    input_size=(160, 120),  # WxH
+    output_size=(40, 32),   # WxH
 )
 
 solver = dict(

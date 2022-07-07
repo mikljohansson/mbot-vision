@@ -16,14 +16,15 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from src.dataset import ImageDataset
-from src.model import create_model_cfg
+from src.model import create_model
 from src.yolov6.solver.build import build_optimizer, build_lr_scheduler
 
 parser = argparse.ArgumentParser(description='Summarize adcopy')
 parser.add_argument("-o", "--output", type=str, required=True, help="File to write model pth")
 parser.add_argument('-t', '--train', type=str, required=True, help='Directory of training images')
-parser.add_argument('-m', '--model', type=str, help='Load pretrained weights from this model pth')
+parser.add_argument('-m', '--model', type=str, help='What model architecture/config to train')
 parser.add_argument('-p', '--parallel', type=int, help='Number of worker processes', default=0)
+parser.add_argument('--resume', type=str, help='Load pretrained weights from this model pth')
 parser.add_argument('--epochs', type=int, help='Number of epochs', default=1)
 parser.add_argument('--batch-size', type=int, help='Batch size', default=4)
 parser.add_argument('--learning-rate', type=float, help='Learning rate', default=1e-3)
@@ -51,11 +52,11 @@ logging.basicConfig(
 
 logger.info(accelerator.state)
 
-model, cfg = create_model_cfg()
+model, cfg = create_model(args.model)
 
-if args.model:
-    logger.info(f'Loading pretrained weights from {args.model}')
-    model.load_state_dict(torch.load(args.model))
+if args.resume:
+    logger.info(f'Loading pretrained weights from {args.resume}')
+    model.load_state_dict(torch.load(args.resume))
 
 dataset = ImageDataset(args.train, target_size=cfg.model.output_size)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.parallel)
@@ -215,4 +216,4 @@ accelerator.wait_for_everyone()
 unwrapped_model = accelerator.unwrap_model(model)
 
 logger.info(f'Saving model to {args.output}')
-accelerator.save(unwrapped_model.state_dict(), args.output)
+accelerator.save({'model': args.model, 'state': unwrapped_model.state_dict()}, args.output)
