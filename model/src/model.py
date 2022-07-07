@@ -136,7 +136,7 @@ class MBotVisionModel(nn.Module):
         # Fuse 3x3, 1x1 and identity layers
         for layer in self.modules():
             if hasattr(layer, 'switch_to_deploy'):
-                print(f'Switching {type(layer)} to deployment configuration')
+                #print(f'Switching {type(layer)} to deployment configuration')
                 layer.switch_to_deploy()
 
         # Add the final sigmoid directly into the model
