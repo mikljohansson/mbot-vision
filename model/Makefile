@@ -22,6 +22,7 @@ COCO_ACCUMULATION_STEPS ?= 1
 COCO_LEARNING_RATE ?= 1e-4
 COCO_MODEL_PATH ?= $(EXPERIMENT)/coco.pth
 
+# 10k optimization steps seems to be fine for this little model
 REC_EPOCHS ?= 500
 REC_BATCH_SIZE ?= 64
 REC_ACCUMULATION_STEPS ?= 1
@@ -77,16 +78,19 @@ $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
 
 output/mbot-vision-model.cpp: $(EXPERIMENT)/recorded.tflite
 	mkdir -p output
+
 	cp $< output/mbot-vision-model.tflite
 	cd output && xxd -i mbot-vision-model.tflite $(notdir $@)
+	rm -f output/mbot-vision-model.tflite
+
 	sed -i 's/unsigned char/#include "mbot-vision-model.h"\n\nalignas\(8\) const unsigned char/g' $@
 	sed -i 's/unsigned int/const unsigned int/g' $@
+
 	cp src/cpp/mbot-vision-model.h $(dir $@)
 	sed -i 's/<INPUT_WIDTH>/$(INPUT_WIDTH)/g' $(dir $@)/mbot-vision-model.h
 	sed -i 's/<INPUT_HEIGHT>/$(INPUT_HEIGHT)/g' $(dir $@)/mbot-vision-model.h
-	rm -f output/mbot-vision-model.tflite
 
-train: $(EXPERIMENT)/recorded.tflite
+train: output/mbot-vision-model.cpp
 
 validate: $(EXPERIMENT)/recorded.pth $(EXPERIMENT)/recorded.tflite
 	PYTHONPATH=. python src/validate.py -m $(EXPERIMENT)/recorded.pth -t $(EXPERIMENT)/recorded.tflite -d dataset/recorded/train

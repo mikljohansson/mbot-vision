@@ -1,3 +1,4 @@
+#include <esp_nn.h>
 #include "tensorflow/lite/micro/micro_error_reporter.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
@@ -81,7 +82,10 @@ void ObjectDetector::begin() {
     //
     // tflite::AllOpsResolver resolver;
     // NOLINTNEXTLINE(runtime-global-variables)
-    static tflite::MicroMutableOpResolver<5> micro_op_resolver;
+
+
+    // NOTE: Don't forget to change the number of 
+    static tflite::MicroMutableOpResolver<18> micro_op_resolver;
     micro_op_resolver.AddAdd();
     micro_op_resolver.AddConcatenation();
     micro_op_resolver.AddConv2D();
@@ -96,6 +100,7 @@ void ObjectDetector::begin() {
     micro_op_resolver.AddResizeNearestNeighbor();
     micro_op_resolver.AddRsqrt();
     micro_op_resolver.AddSplit();
+    micro_op_resolver.AddSquaredDifference();
     micro_op_resolver.AddSub();
     micro_op_resolver.AddTranspose();
     micro_op_resolver.AddTransposeConv();

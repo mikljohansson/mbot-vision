@@ -1,22 +1,16 @@
-Get tfmicro library using this method
-https://github.com/atomic14/platformio-tensorflow-lite
+# Setup
 
-https://github.com/atomic14/tensorflow-lite-esp32/tree/master/firmware
+```
+cd ..
+git clone --recurse-submodules https://github.com/espressif/tflite-micro-esp-examples.git
+cd tflite-micro-esp-examples
 
-Fix std::to_string problems
-https://community.platformio.org/t/to-string-is-not-a-member-of-std/20681/8
+# May need to update the tflite-micro base to get compatiblity with latest TFLite ops
+scripts/sync_from_tflite_micro.sh
 
-Use https://github.com/google/automl/tree/master/efficientdet
-
-Convert tflite to h/cpp
-https://www.tensorflow.org/lite/microcontrollers/build_convert
-
-Install CUDA and TensorRT
-https://www.tensorflow.org/install/gpu#ubuntu_1804_cuda_101
-
-Run model from flash
-https://en.bbs.sipeed.com/t/topic/1811
-
+# If you're not targeting an new ESP32-S3 MCU then remove all the optimized kernels for that architecture
+find components/esp-nn -name '*esp32s3*' -exec rm -f {} ';'
+```
 
 # Seting up /dev aliases
 
