@@ -11,3 +11,4 @@ addict
 git+https://github.com/lessw2020/Ranger21.git
 git+https://github.com/onnx/onnx-tensorflow.git
 opencv-python
+tflite

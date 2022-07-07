@@ -15,8 +15,8 @@ parser.add_argument('-a', '--annotated', required=True, help='Directory to store
 parser.add_argument('-t', '--train', required=True, help='Directory to store training images')
 parser.add_argument('-c', '--classes', required=True, help='Comma separated list of classes of interest')
 parser.add_argument('--batch-size', type=int, help='Batch size', default=64)
-parser.add_argument('--target-width', type=int, help='Input width', default=160)
-parser.add_argument('--target-height', type=int, help='Input height', default=120)
+parser.add_argument('--input-width', type=int, help='Input width', default=160)
+parser.add_argument('--input-height', type=int, help='Input height', default=120)
 args = parser.parse_args()
 
 labels_of_interest = set(args.classes.split(','))
@@ -45,9 +45,9 @@ for i in range(0, len(files), args.batch_size):
         if not found:
             continue
 
-        box = get_input_box(np.asarray(mask, dtype=np.uint8), args.target_width, args.target_height)
-        image = image.resize((args.target_width, args.target_height), box=box, resample=Image.Resampling.LANCZOS)
-        mask = mask.resize((args.target_width, args.target_height), box=box, resample=Image.Resampling.LANCZOS)
+        box = get_input_box(np.asarray(mask, dtype=np.uint8), args.input_width, args.input_height)
+        image = image.resize((args.input_width, args.input_height), box=box, resample=Image.Resampling.LANCZOS)
+        mask = mask.resize((args.input_width, args.input_height), box=box, resample=Image.Resampling.LANCZOS)
         image = Image.merge('RGBA', (*image.split(), *mask.split()))
 
         targetname = os.path.join(args.train, os.path.splitext(os.path.basename(filename))[0] + '.png')

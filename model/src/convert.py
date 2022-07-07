@@ -67,3 +67,28 @@ tflite_model = converter.convert()
 tflite_model_path = os.path.splitext(args.model)[0] + '.tflite'
 with open(tflite_model_path, 'wb') as f:
     f.write(tflite_model)
+
+# Load the model file and show details
+interpreter = tf.lite.Interpreter(model_path=tflite_model_path)
+
+print("\nModel details:")
+for i, d in enumerate(interpreter.get_input_details()):
+    print(f"Input {i} shape: {d['shape']} type: {d['dtype'].__name__}")
+for i, d in enumerate(interpreter.get_output_details()):
+    print(f"Output {i} shape: {d['shape']} type: {d['dtype'].__name__}")
+
+import tflite
+with open(tflite_model_path, 'rb') as f:
+    buf = f.read()
+    parsed_tflite_model = tflite.Model.GetRootAsModel(buf, 0)
+
+opcodes = set()
+for i in range(parsed_tflite_model.OperatorCodesLength()):
+    op = parsed_tflite_model.OperatorCodes(i)
+    if op.CustomCode() is not None:
+        opcodes.add("CUSTOM_" + i)
+    else:
+        opcodes.add(tflite.opcode2name(op.BuiltinCode()))
+
+print("Opcodes used:", ' '.join(sorted(opcodes)))
+print("\nEnsure you add all opcodes to the MicroMutableOpResolver in eye/src/detector/objectdetector.cpp")

@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <Adafruit_SSD1306.h>
 
-#define LOG_TO_SDCARD true
+#define LOG_TO_SDCARD false
 
 extern Adafruit_SSD1306 oled;
 

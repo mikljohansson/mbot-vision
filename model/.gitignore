@@ -3,3 +3,4 @@ dataset
 .idea
 __pycache__
 experiments
+output/*

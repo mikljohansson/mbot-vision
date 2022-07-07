@@ -11,6 +11,10 @@ EXPERIMENT ?= $(LOGGING_PATH)
 
 ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision fp16
 
+# Model input and output dimensions
+INPUT_WIDTH	= 160
+INPUT_HEIGHT = 120
+
 # YOLOv6 trains with total batch size 64-256 for 500k-2M optimization steps (400 epochs) on COCO dataset (328k images, 80 classes)
 COCO_EPOCHS ?= 200
 COCO_BATCH_SIZE ?= 64
@@ -27,7 +31,8 @@ dataset/coco/train: src/coco.py src/image.py
 	mkdir -p dataset/coco/train
 	touch dataset/coco/train
 	rm -f dataset/coco/train/*
-	PYTHONPATH=. python src/coco.py -c "$(PRIMARY_CLASSES)" -e "$(SECONDARY_CLASSES)" -t dataset/coco/train
+	PYTHONPATH=. python src/coco.py -c "$(PRIMARY_CLASSES)" -e "$(SECONDARY_CLASSES)" -t dataset/coco/train \
+		--input-width $(INPUT_WIDTH) --input-height $(INPUT_HEIGHT)
 
 # Extract 2 frames per second from a video
 dataset/recorded/frames/%_000001.jpg: dataset/recorded/videos/%.mp4
@@ -44,10 +49,12 @@ dataset/recorded/train: src/annotate.py src/image.py dataset/recorded/frames $(s
 	mkdir -p dataset/recorded/train
 
 	PYTHONPATH=. python src/annotate.py -c "$(CLASSES)" \
-		-i dataset/recorded/images -a dataset/recorded/annotated -t dataset/recorded/train
+		-i dataset/recorded/images -a dataset/recorded/annotated -t dataset/recorded/train \
+		--input-width $(INPUT_WIDTH) --input-height $(INPUT_HEIGHT)
 
 	PYTHONPATH=. python src/annotate.py -c "$(CLASSES)" \
-		-i dataset/recorded/frames -a dataset/recorded/annotated -t dataset/recorded/train
+		-i dataset/recorded/frames -a dataset/recorded/annotated -t dataset/recorded/train \
+		--input-width $(INPUT_WIDTH) --input-height $(INPUT_HEIGHT)
 
 	touch dataset/recorded/train
 
@@ -67,6 +74,17 @@ $(EXPERIMENT)/recorded.pth:
 
 $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
 	PYTHONPATH=. python src/convert.py -m $< -d dataset/recorded/train
+
+output/mbot-vision-model.cpp: $(EXPERIMENT)/recorded.tflite
+	mkdir -p output
+	cp $< output/mbot-vision-model.tflite
+	cd output && xxd -i mbot-vision-model.tflite $(notdir $@)
+	sed -i 's/unsigned char/#include "mbot-vision-model.h"\n\nalignas\(8\) const unsigned char/g' $@
+	sed -i 's/unsigned int/const unsigned int/g' $@
+	cp src/cpp/mbot-vision-model.h $(dir $@)
+	sed -i 's/<INPUT_WIDTH>/$(INPUT_WIDTH)/g' $(dir $@)/mbot-vision-model.h
+	sed -i 's/<INPUT_HEIGHT>/$(INPUT_HEIGHT)/g' $(dir $@)/mbot-vision-model.h
+	rm -f output/mbot-vision-model.tflite
 
 train: $(EXPERIMENT)/recorded.tflite
 

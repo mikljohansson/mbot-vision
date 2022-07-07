@@ -11,8 +11,8 @@ parser = argparse.ArgumentParser(description='Summarize adcopy')
 parser.add_argument('-c', '--classes', required=True, help='Comma separated list of classes of interest')
 parser.add_argument('-e', '--exclude-classes', default='', help='Comma separated list of classes to exclude from negative sampling')
 parser.add_argument('-t', '--train', required=True, help='Directory to store training images')
-parser.add_argument('--target-width', type=int, help='Input width', default=160)
-parser.add_argument('--target-height', type=int, help='Input height', default=120)
+parser.add_argument('--input-width', type=int, help='Input width', default=160)
+parser.add_argument('--input-height', type=int, help='Input height', default=120)
 args = parser.parse_args()
 
 # See https://towardsdatascience.com/how-to-work-with-object-detection-datasets-in-coco-format-9bf4fb5848a4
@@ -58,12 +58,12 @@ def render_sample(sample, classes, positive_sample=True):
     if not found_roi:
         return False
 
-    box = get_input_box(mask, args.target_width, args.target_height)
+    box = get_input_box(mask, args.input_width, args.input_height)
     mask = Image.fromarray(np.minimum(mask, 255), 'L')
 
     assert image.width == mask.width and image.height == mask.height
-    mask = mask.resize((args.target_width, args.target_height), box=box, resample=Image.Resampling.LANCZOS)
-    image = image.resize((args.target_width, args.target_height), box=box, resample=Image.Resampling.LANCZOS)
+    mask = mask.resize((args.input_width, args.input_height), box=box, resample=Image.Resampling.LANCZOS)
+    image = image.resize((args.input_width, args.input_height), box=box, resample=Image.Resampling.LANCZOS)
 
     image = Image.merge('RGBA', (*image.split(), *mask.split()))
 

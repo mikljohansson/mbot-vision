@@ -5,8 +5,7 @@
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "tensorflow/lite/micro/micro_utils.h"
 
-#include "detection/person_detect_model_data.h"
-#include "detection/person_detect_model_settings.h"
+#include <mbot-vision-model.h>
 #include "detection/objectdetector.h"
 #include "image/camera.h"
 #include "image/jpeg.h"
@@ -20,20 +19,21 @@ constexpr int kTensorArenaSize = 136 * 1024;
 static uint8_t *tensor_arena;
 
 static void cropAndQuantizeImage(const uint8_t *pixels, size_t image_width, size_t image_height, int8_t *target) {
-    const size_t left = (image_width - kNumCols) / 2;
-    const size_t right = image_width - left - kNumCols;
-    const size_t top = (image_height - kNumRows) / 2;
+    const size_t left = (image_width - MBOT_VISION_MODEL_INPUT_WIDTH) / 2;
+    const size_t right = image_width - left - MBOT_VISION_MODEL_INPUT_WIDTH;
+    const size_t top = (image_height - MBOT_VISION_MODEL_INPUT_HEIGHT) / 2;
 
     const uint8_t* source = pixels + (top * image_width + left) * 3;
+    const size_t pixel_count = MBOT_VISION_MODEL_INPUT_WIDTH * MBOT_VISION_MODEL_INPUT_HEIGHT;
 
-    for (size_t y = 0; y < kNumRows; y++) {
-        for (size_t x = 0; x < kNumCols; x++) {
-            /**
-             * Gamma corected rgb to greyscale formula: Y = 0.299R + 0.587G + 0.114B
-             * for effiency we use some tricks on this + quantize to [-128, 127]
-             */
-            *target = ((305 * (int)source[0] + 600 * (int)source[1] + 119 * (int)source[2]) >> 10) - 128;
+    // Input is stored in HWC format, target needs to be CHW format
 
+    for (size_t y = 0; y < MBOT_VISION_MODEL_INPUT_HEIGHT; y++) {
+        for (size_t x = 0; x < MBOT_VISION_MODEL_INPUT_WIDTH; x++) {
+            target[0] = source[0];
+            target[pixel_count] = source[1];
+            target[pixel_count * 2] = source[2];
+            
             target++;
             source += 3;
         }
@@ -64,7 +64,7 @@ void ObjectDetector::begin() {
 
     // Map the model into a usable data structure. This doesn't involve any
     // copying or parsing, it's a very lightweight operation.
-    model = tflite::GetModel(g_person_detect_model_data);
+    model = tflite::GetModel(mbot_vision_model_tflite);
     if (model->version() != TFLITE_SCHEMA_VERSION) {
         TF_LITE_REPORT_ERROR(error_reporter,
                             "Model provided is schema version %d not equal "
@@ -82,11 +82,23 @@ void ObjectDetector::begin() {
     // tflite::AllOpsResolver resolver;
     // NOLINTNEXTLINE(runtime-global-variables)
     static tflite::MicroMutableOpResolver<5> micro_op_resolver;
-    micro_op_resolver.AddAveragePool2D();
+    micro_op_resolver.AddAdd();
+    micro_op_resolver.AddConcatenation();
     micro_op_resolver.AddConv2D();
     micro_op_resolver.AddDepthwiseConv2D();
+    micro_op_resolver.AddLogistic();
+    micro_op_resolver.AddMaxPool2D();
+    micro_op_resolver.AddMean();
+    micro_op_resolver.AddMul();
+    micro_op_resolver.AddPad();
+    micro_op_resolver.AddQuantize();
     micro_op_resolver.AddReshape();
-    micro_op_resolver.AddSoftmax();
+    micro_op_resolver.AddResizeNearestNeighbor();
+    micro_op_resolver.AddRsqrt();
+    micro_op_resolver.AddSplit();
+    micro_op_resolver.AddSub();
+    micro_op_resolver.AddTranspose();
+    micro_op_resolver.AddTransposeConv();
 
     // Build an interpreter to run the model with.
     // NOLINTNEXTLINE(runtime-global-variables)
@@ -106,9 +118,9 @@ void ObjectDetector::begin() {
 
     if ((_input->dims->size != 4) || 
         (_input->dims->data[0] != 1) ||
-        (_input->dims->data[1] != kNumRows) ||
-        (_input->dims->data[2] != kNumCols) ||
-        (_input->dims->data[3] != kNumChannels) || 
+        (_input->dims->data[1] != MBOT_VISION_MODEL_INPUT_HEIGHT) ||
+        (_input->dims->data[2] != MBOT_VISION_MODEL_INPUT_WIDTH) ||
+        (_input->dims->data[3] != 3) || 
         (_input->type != kTfLiteInt8)) {
         TF_LITE_REPORT_ERROR(error_reporter,
                             "Bad input tensor parameters in model");
@@ -130,7 +142,7 @@ DetectedObject ObjectDetector::get() {
 void ObjectDetector::run() {
     _framerate.init();
 
-    Serial.print("Starting face detector");
+    Serial.print("Starting object detector");
 
     while (true) {
         camera_fb_t *fb = fbqueue->take();
@@ -157,7 +169,7 @@ void ObjectDetector::run() {
             TfLiteTensor* output = interpreter->output(0);
 
             // Process the inference results.
-            // Process the inference results.
+            /*
             int8_t person_score = output->data.uint8[kPersonIndex];
             int8_t no_person_score = output->data.uint8[kNotAPersonIndex];
 
@@ -168,6 +180,7 @@ void ObjectDetector::run() {
 
             serialPrint("Person detection scores: %f yes, %f no\n", person_score_f, no_person_score_f);
             delay(1000);
+            */
 
             _framerate.tick();
         }
@@ -177,6 +190,7 @@ void ObjectDetector::run() {
 static int8_t *buffer = 0;
 
 void ObjectDetector::draw(uint8_t *pixels, size_t width, size_t height) {
+    /*
     if (!buffer) {
         buffer = new int8_t[kNumCols * kNumRows * kNumChannels];
         memset(buffer, 0, kNumCols * kNumRows * kNumChannels);
@@ -200,6 +214,7 @@ void ObjectDetector::draw(uint8_t *pixels, size_t width, size_t height) {
 
         target += (right + left) * 3;
     }
+    */
 }
 
 void ObjectDetector::runStatic(void *p) {
