@@ -106,11 +106,10 @@ class YOLOv6Model(nn.Module):
         )
 
         self.head = SegmentationHead()
+        self.out = nn.Identity()
 
         self.mean2x = torch.nn.Parameter(2. * torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1), requires_grad=False)
         self.std = torch.nn.Parameter(torch.tensor([0.229, 0.224, 0.225]).reshape(-1, 1, 1), requires_grad=False)
-
-        self.out = nn.Identity()
 
         initialize_weights(self)
 

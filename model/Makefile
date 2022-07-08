@@ -9,7 +9,8 @@ LOGGING_DIR ?= experiments/$(shell git rev-parse --abbrev-ref HEAD)
 LOGGING_PATH := $(shell echo "$(LOGGING_DIR)/`date +'%Y%m%d-%H%M%S'`")
 EXPERIMENT ?= $(LOGGING_PATH)
 
-ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision fp16
+#ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision fp16
+ACCELERATE_ARGS := --mixed_precision fp16
 
 #MODEL ?= yolov6p
 MODEL ?= mobilenet_v3_small
@@ -74,7 +75,8 @@ $(EXPERIMENT)/recorded.pth:
 #$(COCO_MODEL_PATH)
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) --gradient_accumulation_steps $(REC_ACCUMULATION_STEPS) \
 		src/train.py -m $(MODEL) -p $(PARALLEL) -t dataset/recorded/train -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE) \
-		--learning-rate $(REC_LEARNING_RATE) --accumulation-steps $(REC_ACCUMULATION_STEPS) --unknown-mask
+		--learning-rate $(REC_LEARNING_RATE) --accumulation-steps $(REC_ACCUMULATION_STEPS)
+#--unknown-mask
 #--resume $<
 
 $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth

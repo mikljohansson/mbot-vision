@@ -1,17 +1,6 @@
-import math
-
 import torch
 from torch import nn
 import torch.nn.functional as F
-
-from src.yolov6.models.efficientrep import EfficientRep
-from src.yolov6.models.reppan import RepPANNeck
-from src.yolov6.utils.torch_utils import fuse_model, fuse_conv_and_bn, initialize_weights
-
-
-def make_divisible(x, divisor):
-    # Upward revision the value x to make it evenly divisible by the divisor.
-    return math.ceil(x / divisor) * divisor
 
 
 class ResidualBlock(nn.Sequential):
@@ -39,21 +28,11 @@ class SegmentationHead(nn.Module):
             nn.Conv2d(576, 128, kernel_size=3, padding=1, groups=64, bias=False),
             nn.GroupNorm(16, 128),
             UpsampleInterpolate2d(),
-            nn.Conv2d(128, 32, kernel_size=3, padding=1, groups=32, bias=False),
-            nn.GroupNorm(8, 32),
-            UpsampleInterpolate2d(),
-            nn.Conv2d(32, 16, kernel_size=3, padding=1, groups=16, bias=False),
+            nn.Conv2d(128, 16, kernel_size=3, padding=1, groups=16, bias=False),
             nn.GroupNorm(4, 16),
         )
 
         self.fuse = nn.Sequential(
-            ResidualBlock(
-                nn.Conv2d(16, 16, kernel_size=3, padding=1, groups=16, bias=False),
-                nn.GroupNorm(4, 16),
-                nn.Conv2d(16, 64, kernel_size=1),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(64, 16, kernel_size=1),
-            ),
             nn.Conv2d(16, 1, kernel_size=1),
         )
 
@@ -68,14 +47,24 @@ class MobileNetModel(nn.Module):
     """
     def __init__(self, config):
         super().__init__()
-        self.backbone = config.backbone(pretrained=config.pretrained)
+
+        self.backbone = config.backbone
         del self.backbone.avgpool
         del self.backbone.classifier
 
         self.head = SegmentationHead()
         self.out = nn.Identity()
 
+        self.mean2x = torch.nn.Parameter(2. * torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1), requires_grad=False)
+        self.std = torch.nn.Parameter(torch.tensor([0.229, 0.224, 0.225]).reshape(-1, 1, 1), requires_grad=False)
+
     def forward(self, x):
+        # Normalize image values and convert to [-1, 1] range inside the network, to simplify deployment
+        #image = (image - self.mean) / self.std
+        #image = (image - 0.5) / 0.5
+        # https://www.wolframalpha.com/input?i=simplify+%28%28x+-+m%29+%2F+s+-+0.5%29+%2F+0.5
+        x = (2. * x - self.mean2x) / self.std - 1.
+
         x = self.backbone.features(x)
         x = self.head(x)
         x = self.out(x)
