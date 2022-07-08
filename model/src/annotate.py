@@ -22,7 +22,7 @@ args = parser.parse_args()
 labels_of_interest = set(args.classes.split(','))
 files = glob.glob(os.path.join(args.input, '*.jpg'))
 
-model = torch.hub.load('ultralytics/yolov5', 'yolov5x', trust_repo=True)
+model = torch.hub.load('ultralytics/yolov5', 'yolov5x')
 
 for i in range(0, len(files), args.batch_size):
     batch = files[i:(i + args.batch_size)]

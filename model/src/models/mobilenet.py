@@ -26,7 +26,7 @@ class SegmentationHead(nn.Module):
 
         self.upsample = nn.Sequential(
             UpsampleInterpolate2d(),
-            nn.Conv2d(in_ch, in_ch, kernel_size=3, padding=1, groups=16, bias=False),
+            nn.Conv2d(in_ch, in_ch, kernel_size=3, padding=1, groups=in_ch, bias=False),
             nn.GroupNorm(16, in_ch),
             nn.Conv2d(in_ch, 16, kernel_size=1),
 
