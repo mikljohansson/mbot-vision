@@ -22,11 +22,11 @@ def _mobilenet_v3_micro_conf(width_mult: float = 1.0, reduced_tail: bool = False
         bneck_conf(40, 5, 240, 40, True, "HS", 1, 1),
         bneck_conf(40, 5, 120, 48, True, "HS", 1, 1),
         bneck_conf(48, 5, 144, 48, True, "HS", 1, 1),
-        bneck_conf(48, 5, 288, 96 // reduce_divider, True, "HS", 2, dilation),  # C4
-        bneck_conf(96 // reduce_divider, 5, 576 // reduce_divider, 96 // reduce_divider, True, "HS", 1, dilation),
-        bneck_conf(96 // reduce_divider, 5, 576 // reduce_divider, 96 // reduce_divider, True, "HS", 1, dilation),
+        bneck_conf(48, 5, 144, 96 // reduce_divider, True, "HS", 2, dilation),  # C4
+        bneck_conf(96 // reduce_divider, 5, 144 // reduce_divider, 96 // reduce_divider, True, "HS", 1, dilation),
+        bneck_conf(96 // reduce_divider, 5, 144 // reduce_divider, 96 // 4 // reduce_divider, True, "HS", 1, dilation),
     ]
-    last_channel = adjust_channels(1024 // reduce_divider)  # C5
+    last_channel = adjust_channels(144 // reduce_divider)  # C5
 
     return inverted_residual_setting, last_channel
 
@@ -55,8 +55,8 @@ def _mobilenet_v3_micro(
 
 model = dict(
     type=MobileNetModel,
-    backbone=_mobilenet_v3_micro("mobilenet_v3_small", *_mobilenet_v3_micro_conf(reduced_tail=True)),
-    backbone_out_ch=288,
+    backbone=_mobilenet_v3_micro("mobilenet_v3_small", *_mobilenet_v3_micro_conf()),
+    backbone_out_ch=144,
     pretrained=True,
     input_size=(160, 120),  # WxH
     output_size=(20, 16),   # WxH

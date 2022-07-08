@@ -12,6 +12,16 @@ pip install -r https://raw.githubusercontent.com/ultralytics/yolov5/master/requi
 pip install -r requirements.txt
 ```
 
+# Model summary
+
+```
+# Show PyTorch model summary
+make summary
+
+# Show information about a quantized TFLite model
+EXPERIMENT=experiments/mobilenet-micro/20220708-100725F make summary-tflite
+```
+
 # Training
 
 Put training videos into `dataset/recorded/videos` and training images into `dataset/recorded/images`. 

@@ -16,7 +16,7 @@ tflite::ErrorReporter* error_reporter = nullptr;
 const tflite::Model* model = nullptr;
 tflite::MicroInterpreter* interpreter = nullptr;
 
-constexpr int kTensorArenaSize = 136 * 1024;
+constexpr int kTensorArenaSize = 512 * 1024;
 static uint8_t *tensor_arena;
 
 static void cropAndQuantizeImage(const uint8_t *pixels, size_t image_width, size_t image_height, int8_t *target) {
@@ -125,12 +125,12 @@ void ObjectDetector::begin() {
 
     if ((_input->dims->size != 4) || 
         (_input->dims->data[0] != 1) ||
-        (_input->dims->data[1] != MBOT_VISION_MODEL_INPUT_HEIGHT) ||
-        (_input->dims->data[2] != MBOT_VISION_MODEL_INPUT_WIDTH) ||
-        (_input->dims->data[3] != 3) || 
-        (_input->type != kTfLiteInt8)) {
+        (_input->dims->data[1] != 3) || 
+        (_input->dims->data[2] != MBOT_VISION_MODEL_INPUT_HEIGHT) ||
+        (_input->dims->data[3] != MBOT_VISION_MODEL_INPUT_WIDTH) ||
+        (_input->type != kTfLiteUInt8)) {
         TF_LITE_REPORT_ERROR(error_reporter,
-                            "Bad input tensor parameters in model");
+                            "The models input tensor shape and type doesn't match what's expected by objectdetector.cc");
         return;
     }
 
@@ -149,7 +149,7 @@ DetectedObject ObjectDetector::get() {
 void ObjectDetector::run() {
     _framerate.init();
 
-    Serial.print("Starting object detector");
+    Serial.println("Starting object detector");
 
     while (true) {
         camera_fb_t *fb = fbqueue->take();

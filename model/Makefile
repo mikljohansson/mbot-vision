@@ -106,6 +106,9 @@ validate: $(EXPERIMENT)/recorded.pth $(EXPERIMENT)/recorded.tflite
 summary:
 	CUDA_VISIBLE_DEVICES= PYTHONPATH=. python src/summary.py -m $(MODEL) $(shell if [ "$(DEPLOY)" != "no" ]; then echo "-d"; fi)
 
+summary-tflite:
+	CUDA_VISIBLE_DEVICES= PYTHONPATH=. python src/summary.py -m $(EXPERIMENT)/recorded.tflite
+
 # Start tensorboard in the background
 tensorboard:
 	tensorboard --bind_all --samples_per_plugin images=500 --logdir experiments &
