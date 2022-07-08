@@ -85,7 +85,7 @@ void ObjectDetector::begin() {
 
 
     // NOTE: Don't forget to change the number of 
-    static tflite::MicroMutableOpResolver<18> micro_op_resolver;
+    static tflite::MicroMutableOpResolver<20> micro_op_resolver;
     micro_op_resolver.AddAdd();
     micro_op_resolver.AddConcatenation();
     micro_op_resolver.AddConv2D();
@@ -93,9 +93,11 @@ void ObjectDetector::begin() {
     micro_op_resolver.AddLogistic();
     micro_op_resolver.AddMaxPool2D();
     micro_op_resolver.AddMean();
+    micro_op_resolver.AddMinimum();
     micro_op_resolver.AddMul();
     micro_op_resolver.AddPad();
     micro_op_resolver.AddQuantize();
+    micro_op_resolver.AddRelu();
     micro_op_resolver.AddReshape();
     micro_op_resolver.AddResizeNearestNeighbor();
     micro_op_resolver.AddRsqrt();

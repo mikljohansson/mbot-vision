@@ -1,3 +1,5 @@
+import math
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -20,12 +22,12 @@ class UpsampleInterpolate2d(nn.Module):
 
 
 class SegmentationHead(nn.Module):
-    def __init__(self):
+    def __init__(self, in_ch):
         super().__init__()
 
         self.upsample = nn.Sequential(
             UpsampleInterpolate2d(),
-            nn.Conv2d(576, 128, kernel_size=3, padding=1, groups=64, bias=False),
+            nn.Conv2d(in_ch, 128, kernel_size=3, padding=1, groups=math.gcd(in_ch, 128), bias=False),
             nn.GroupNorm(16, 128),
             UpsampleInterpolate2d(),
             nn.Conv2d(128, 16, kernel_size=3, padding=1, groups=16, bias=False),
@@ -52,7 +54,7 @@ class MobileNetModel(nn.Module):
         del self.backbone.avgpool
         del self.backbone.classifier
 
-        self.head = SegmentationHead()
+        self.head = SegmentationHead(config.backbone_out_ch)
         self.out = nn.Identity()
 
         self.mean2x = torch.nn.Parameter(2. * torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1), requires_grad=False)

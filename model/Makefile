@@ -13,7 +13,7 @@ EXPERIMENT ?= $(LOGGING_PATH)
 ACCELERATE_ARGS := --mixed_precision fp16
 
 #MODEL ?= yolov6p
-MODEL ?= mobilenet_v3_small
+MODEL ?= mobilenet_v3_micro
 DEPLOY ?= no
 
 # Model input and output dimensions
