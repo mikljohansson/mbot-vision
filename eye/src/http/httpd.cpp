@@ -84,5 +84,5 @@ void httpdServiceRequests(void *p) {
 
 void httpdRun(Detector &d) {
     detector = &d;
-    xTaskCreatePinnedToCore(httpdServiceRequests, "httpd", 10000, NULL, 2, &httpdTask, 1);
+    xTaskCreatePinnedToCore(httpdServiceRequests, "httpd", 10000, NULL, 2, &httpdTask, 0);
 }

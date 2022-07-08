@@ -1,8 +1,7 @@
-import math
-
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torchvision.ops.misc import ConvNormActivation
 
 
 class ResidualBlock(nn.Sequential):
@@ -27,20 +26,18 @@ class SegmentationHead(nn.Module):
 
         self.upsample = nn.Sequential(
             UpsampleInterpolate2d(),
-            nn.Conv2d(in_ch, 64, kernel_size=3, padding=1, bias=False),
-            nn.GroupNorm(16, 64),
-            UpsampleInterpolate2d(),
-            nn.Conv2d(64, 16, kernel_size=3, padding=1, bias=False),
-            nn.GroupNorm(4, 16),
-        )
+            nn.Conv2d(in_ch, in_ch, kernel_size=3, padding=1, groups=16, bias=False),
+            nn.GroupNorm(16, in_ch),
+            nn.Conv2d(in_ch, 16, kernel_size=1),
 
-        self.fuse = nn.Sequential(
+            UpsampleInterpolate2d(),
+            nn.Conv2d(16, 16, kernel_size=3, padding=1, groups=16, bias=False),
+            nn.GroupNorm(4, 16),
             nn.Conv2d(16, 1, kernel_size=1),
         )
 
     def forward(self, x):
         x = self.upsample(x)
-        x = self.fuse(x)
         return x
 
 class MobileNetModel(nn.Module):
@@ -51,8 +48,20 @@ class MobileNetModel(nn.Module):
         super().__init__()
 
         self.backbone = config.backbone
+
+        # Remove the last channel expansion layer
+        del self.backbone.features[-1]
+
+        # Remove the object detection head
         del self.backbone.avgpool
         del self.backbone.classifier
+
+        # Switch all activations to use ReLU
+        for module in self.backbone.modules():
+            if isinstance(module, ConvNormActivation):
+                if type(module[-1]) in [nn.Hardswish, nn.LeakyReLU, nn.SiLU]:
+                    del module[-1]
+                    module.append(nn.ReLU())
 
         self.head = SegmentationHead(config.backbone_out_ch)
         self.out = nn.Identity()
@@ -75,3 +84,8 @@ class MobileNetModel(nn.Module):
     def deploy(self):
         # Add the final sigmoid directly into the model
         self.out = nn.Sigmoid()
+
+        # Perform activation inplace
+        for m in self.modules():
+            if type(m) in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
+                m.inplace = True

@@ -59,7 +59,7 @@ class SegmentationHead(nn.Module):
                 nn.Conv2d(16, 16, kernel_size=3, padding=1, groups=16, bias=False),
                 nn.GroupNorm(8, 16),
                 nn.Conv2d(16, 64, kernel_size=1),
-                nn.ReLU(inplace=True),
+                nn.ReLU(),
                 nn.Conv2d(64, 16, kernel_size=1),
             ),
             nn.Conv2d(16, 1, kernel_size=1),
@@ -138,3 +138,8 @@ class YOLOv6Model(nn.Module):
 
         # Add the final sigmoid directly into the model
         self.out = nn.Sigmoid()
+
+        # Perform activation inplace
+        for m in self.modules():
+            if type(m) in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
+                m.inplace = True

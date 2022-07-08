@@ -1,3 +1,4 @@
+import re
 from functools import partial
 
 from torch.hub import load_state_dict_from_url
@@ -14,19 +15,16 @@ def _mobilenet_v3_micro_conf(width_mult: float = 1.0, reduced_tail: bool = False
     adjust_channels = partial(InvertedResidualConfig.adjust_channels, width_mult=width_mult)
 
     inverted_residual_setting = [
-        bneck_conf(16, 3, 16, 16, True, "RE", 2, 1),  # C1
-        bneck_conf(16, 3, 72, 24, False, "RE", 2, 1),  # C2
-        bneck_conf(24, 3, 88, 24, False, "RE", 1, 1),
-        bneck_conf(24, 5, 96, 40, True, "HS", 2, 1),  # C3
-        bneck_conf(40, 5, 240, 40, True, "HS", 1, 1),
-        bneck_conf(40, 5, 240, 40, True, "HS", 1, 1),
-        bneck_conf(40, 5, 120, 48, True, "HS", 1, 1),
-        bneck_conf(48, 5, 144, 48, True, "HS", 1, 1),
-        bneck_conf(48, 5, 144, 96 // reduce_divider, True, "HS", 2, dilation),  # C4
-        bneck_conf(96 // reduce_divider, 5, 144 // reduce_divider, 96 // reduce_divider, True, "HS", 1, dilation),
-        bneck_conf(96 // reduce_divider, 5, 144 // reduce_divider, 96 // 4 // reduce_divider, True, "HS", 1, dilation),
+        bneck_conf(8, 3, 8, 8, True, "RE", 2, 1),  # C1
+        bneck_conf(8, 3, 8, 16, False, "RE", 2, 1),  # C2
+        bneck_conf(16, 3, 48, 24, False, "RE", 2, 1),  # C3
+        bneck_conf(24, 3, 120, 24, True, "RE", 1, 1),
+        bneck_conf(24, 3, 120, 24, True, "RE", 1, 1),
+        bneck_conf(24, 3, 96, 64 // reduce_divider, True, "RE", 2, dilation),  # C4
+        bneck_conf(64 // reduce_divider, 3, 144 // reduce_divider, 64 // reduce_divider, True, "RE", 1, dilation),
+        bneck_conf(64 // reduce_divider, 3, 144 // reduce_divider, 64 // reduce_divider, True, "RE", 1, dilation),
     ]
-    last_channel = adjust_channels(144 // reduce_divider)  # C5
+    last_channel = adjust_channels(64 // reduce_divider)  # C5
 
     return inverted_residual_setting, last_channel
 
@@ -34,7 +32,7 @@ def _mobilenet_v3_micro(
         arch,
         inverted_residual_setting,
         last_channel,
-        pretrained=True,
+        pretrained=False,
         progress=True):
     model = MobileNetV3(inverted_residual_setting, last_channel)
     if pretrained:
@@ -43,20 +41,21 @@ def _mobilenet_v3_micro(
         state_dict = load_state_dict_from_url(model_urls[arch], progress=progress)
 
         # Remove weights that would cause shape mismatch
-        prefixes = ['features.9', 'features.10', 'features.11', 'features.12', 'classifier.']
+        prefixes = r'features\.([2-9]|10|11|12)|classifier\.'
         for key in list(state_dict.keys()):
-            for prefix in prefixes:
-                if key.startswith(prefix):
-                    del state_dict[key]
-                    break
+            if re.search(prefixes, key):
+                del state_dict[key]
 
         model.load_state_dict(state_dict, strict=False)
     return model
 
+inverted_residual_setting, last_channel = _mobilenet_v3_micro_conf()
+backbone = _mobilenet_v3_micro("mobilenet_v3_small", inverted_residual_setting, last_channel)
+
 model = dict(
     type=MobileNetModel,
-    backbone=_mobilenet_v3_micro("mobilenet_v3_small", *_mobilenet_v3_micro_conf()),
-    backbone_out_ch=144,
+    backbone=backbone,
+    backbone_out_ch=last_channel,
     pretrained=True,
     input_size=(160, 120),  # WxH
     output_size=(20, 16),   # WxH

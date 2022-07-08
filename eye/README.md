@@ -16,6 +16,7 @@ scripts/sync_from_tflite_micro.sh
 find components/esp-nn -name '*esp32s3*' -exec rm -f {} ';'
 
 # Remove all the default tfmicro kernels in favor of the ESP32 optimized kernels
+# https://github.com/espressif/tflite-micro-esp-examples#esp-nn-integration
 for f in components/tflite-lib/tensorflow/lite/micro/kernels/esp_nn/*.cc; do rm components/tflite-lib/tensorflow/lite/micro/kernels/`basename $f`; done
 ```
 
