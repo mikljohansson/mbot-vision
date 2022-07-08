@@ -1,5 +1,9 @@
 # Setup
 
+You need to prepare the ESP32 specific tflite-micro distribution a bit in order to make it usable from PlatformIO
+and get the ESP32 optimized kernels. These kernels can make a 3x factor change in inference performance on the 
+ESP32, or even more on an ESP32-S3.
+
 ```
 cd ..
 git clone --recurse-submodules https://github.com/espressif/tflite-micro-esp-examples.git
@@ -10,6 +14,9 @@ scripts/sync_from_tflite_micro.sh
 
 # If you're not targeting an new ESP32-S3 MCU then remove all the optimized kernels for that architecture
 find components/esp-nn -name '*esp32s3*' -exec rm -f {} ';'
+
+# Remove all the default tfmicro kernels in favor of the ESP32 optimized kernels
+for f in components/tflite-lib/tensorflow/lite/micro/kernels/esp_nn/*.cc; do rm components/tflite-lib/tensorflow/lite/micro/kernels/`basename $f`; done
 ```
 
 # Seting up /dev aliases
