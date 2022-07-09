@@ -157,7 +157,11 @@ void ObjectDetector::run() {
         camera_fb_t *fb = fbqueue->take();
 
         if (fb) {
+            BenchmarkTimer frame, decompress;
+
             bool result = _decoder.decompress(fb->buf, fb->len);
+            decompress.stop();
+
             fbqueue->release(fb);
 
             if (!result) {
@@ -171,9 +175,11 @@ void ObjectDetector::run() {
             cropAndQuantizeImage(pixels, width, height, _input->data.int8);
 
             // Run the model on this input and make sure it succeeds.
+            BenchmarkTimer inference;
             if (kTfLiteOk != interpreter->Invoke()) {
                 TF_LITE_REPORT_ERROR(error_reporter, "Invoke failed.");
             }
+            inference.stop();
 
             TfLiteTensor* output = interpreter->output(0);
 
@@ -202,7 +208,8 @@ void ObjectDetector::run() {
             if (probability >= 0.1) {
                 _detected = {(float)maxx / output->dims->data[3], (float)maxy / output->dims->data[2], true};
                 xSemaphoreGive(_signal);
-                serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f\n", _detected.x, _detected.y, probability);
+                serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f (decompress %dms, inference %dms)\n", 
+                    _detected.x, _detected.y, probability, decompress.took(), inference.took());
             }
             else {
                 _detected = {0, 0, false};

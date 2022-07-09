@@ -94,7 +94,7 @@ class LeakySigmoid(nn.Module):
         self.act = nn.Sigmoid()
 
     def forward(self, x):
-        return self.act(x) + x * 0.01
+        return self.act(x) + x * 0.001
 
 
 class BiasedSqueezeAndExcitation(torch.nn.Module):

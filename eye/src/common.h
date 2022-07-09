@@ -41,4 +41,25 @@ static void oledDisplayImage(const uint8_t *image, size_t width, size_t height) 
     oled.drawGrayscaleBitmap(0, 0, image, width, height);
 }
 
+class BenchmarkTimer {
+    private:
+        unsigned long started;
+        unsigned long stopped;
+
+    public:
+        BenchmarkTimer()
+         : started(millis()), stopped(0) {}
+
+        unsigned long took() {
+            stop();
+            return stopped - started;
+        }
+
+        void stop() {
+            if (!stopped) {
+                stopped = millis();
+            }
+        }
+};
+
 #endif
