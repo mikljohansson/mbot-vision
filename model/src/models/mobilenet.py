@@ -55,25 +55,25 @@ class DilatedGaussianFilter(nn.Module):
         super().__init__()
 
 class DetectionHead(nn.Module):
-    def __init__(self, kernel_size=7):
+    def __init__(self):
         super().__init__()
 
         self.act = nn.Sigmoid()
-        self.kernel = gkern(kernel_size, 2).unsqueeze(0).unsqueeze(0).to(dtype=torch.float32)
 
-        self.conv1 = self.create_conv(kernel_size, 1)
-        # self.conv2 = self.create_conv(kernel_size, 3)
-        # self.conv3 = self.create_conv(kernel_size, 5)
+        self.conv1 = self.create_conv(3, 1)
+        self.conv2 = self.create_conv(5, 1)
+        self.conv3 = self.create_conv(7, 1)
 
     def create_conv(self, kernel_size, dilation):
         conv = nn.Conv2d(1, 1, kernel_size=kernel_size, dilation=dilation,
                          padding=(kernel_size * dilation - dilation) // 2, bias=False)
-        conv.weight.data[:] = self.kernel
+        conv.weight.data[:] = gkern(kernel_size, 2).unsqueeze(0).unsqueeze(0).to(dtype=torch.float32)
         return conv
 
     def forward(self, x):
         x = self.act(x)
-        x = self.conv1(x) #+ self.conv2(x)# + self.conv3(x)
+        x = self.conv1(x) / (3**2) * 0.7 + self.conv2(x) / (5**2) * 0.2 + self.conv3(x) / (7**2) * 0.1
+        x = torch.log(x + 1.)
         return x
 
 
