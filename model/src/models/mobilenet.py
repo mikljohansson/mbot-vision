@@ -74,7 +74,6 @@ class DetectionHead(nn.Module):
     def forward(self, x):
         x = self.act(x)
         x = self.conv1(x) #+ self.conv2(x)# + self.conv3(x)
-        x = x / x.max()
         return x
 
 

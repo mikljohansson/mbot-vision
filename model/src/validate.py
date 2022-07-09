@@ -36,7 +36,7 @@ for inputs, _, _ in dataloader:
     image.save(os.path.join(os.path.dirname(args.torch_model), 'validation/%03d-image.png' % image_count))
 
     results = model(inputs)
-    mask = torchvision.transforms.functional.to_pil_image(results[0])
+    mask = torchvision.transforms.functional.to_pil_image(results[0] / results[0].max())
     mask = mask.resize(image.size, resample=Image.Resampling.NEAREST)
     mask.save(os.path.join(os.path.dirname(args.torch_model), 'validation/%03d-torch.png' % image_count))
 

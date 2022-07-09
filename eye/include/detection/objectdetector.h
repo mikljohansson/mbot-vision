@@ -18,6 +18,8 @@ class ObjectDetector : public Detector {
 
         TfLiteTensor *_input;
 
+        uint8_t *_lastoutputbuf;
+
     public:
         ObjectDetector();
         ~ObjectDetector();

@@ -44,7 +44,7 @@ static void cropAndQuantizeImage(const uint8_t *pixels, size_t image_width, size
 }
 
 ObjectDetector::ObjectDetector()
- : _framerate("Object detector framerate: %02f\n"), _detected({0, 0, false}) {
+ : _framerate("Object detector framerate: %02f\n"), _detected({0, 0, false}), _lastoutputbuf(0) {
     _signal = xSemaphoreCreateBinary();
 }
 
@@ -177,11 +177,11 @@ void ObjectDetector::run() {
 
             // Process the inference results
             int maxx = 0, maxy = 0;
-            float maxv = -1.0;
+            int maxv = -1.0;
 
             for (int y = 0; y < output->dims->data[2]; y++) {
                 for (int x = 0; x < output->dims->data[3]; x++) {
-                    float val = output->data.uint8[y * output->dims->data[3] + x];
+                    int val = output->data.uint8[y * output->dims->data[3] + x];
 
                     if (val > maxv) {
                         maxv = val;
@@ -191,10 +191,16 @@ void ObjectDetector::run() {
                 }
             }
 
-            if (maxv >= 0.1) {
+            if (!_lastoutputbuf) {
+                _lastoutputbuf = new uint8_t[output->dims->data[2] * output->dims->data[3]];
+            }
+            memcpy(_lastoutputbuf, output->data.uint8, output->dims->data[2] * output->dims->data[3]);
+
+            float probability = (float)maxv / 255;
+            if (probability >= 0.1) {
                 _detected = {(float)maxx / output->dims->data[3], (float)maxy / output->dims->data[2], true};
                 xSemaphoreGive(_signal);
-                serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f\n", _detected.x, _detected.y, maxv);
+                serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f\n", _detected.x, _detected.y, probability);
             }
             else {
                 _detected = {0, 0, false};
@@ -208,31 +214,20 @@ void ObjectDetector::run() {
 static int8_t *buffer = 0;
 
 void ObjectDetector::draw(uint8_t *pixels, size_t width, size_t height) {
-    /*
-    if (!buffer) {
-        buffer = new int8_t[kNumCols * kNumRows * kNumChannels];
-        memset(buffer, 0, kNumCols * kNumRows * kNumChannels);
+    if (!_lastoutputbuf) {
+        return;
     }
-    
-    cropAndQuantizeImage(pixels, width, height, buffer);
 
-    const size_t left = (width - kNumCols) / 2;
-    const size_t right = width - left - kNumCols;
-    const size_t top = (height - kNumRows) / 2;
+    TfLiteTensor* output = interpreter->output(0);
+    size_t offset = width / 2 - output->dims->data[3] / 2 + (height / 2 - output->dims->data[2] / 2) * width;
 
-    uint8_t* target = pixels + (top * width + left) * 3;
-    const int8_t* source = buffer;
-
-    for (size_t y = 0; y < kNumRows; y++) {
-        for (size_t x = 0; x < kNumCols; x++) {
-            target[0] = target[1] = target[2] = (uint8_t)((int)*source + 128);
-            target += 3;
-            source++;
+    for (int y = 0; y < output->dims->data[2]; y++) {
+        for (int x = 0; x < output->dims->data[3]; x++) {
+            uint8_t val = _lastoutputbuf[y * output->dims->data[3] + x];
+            size_t pos = (offset + y * width + x) * 3;
+            pixels[pos] = pixels[pos + 1] = pixels[pos + 2] = val;
         }
-
-        target += (right + left) * 3;
     }
-    */
 }
 
 void ObjectDetector::runStatic(void *p) {
