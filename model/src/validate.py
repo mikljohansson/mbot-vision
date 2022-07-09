@@ -17,7 +17,7 @@ parser.add_argument("-d", "--dataset", required=True, help="Directory of sample 
 args = parser.parse_args()
 
 checkpoint = torch.load(args.torch_model)
-model, cfg = create_model()
+model, cfg = create_model(checkpoint['model'])
 model.load_state_dict(checkpoint['state'])
 model.deploy()
 model.eval()

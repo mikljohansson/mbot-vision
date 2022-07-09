@@ -191,9 +191,10 @@ void ObjectDetector::run() {
                 }
             }
 
-            if (maxv >= 1.0) {
+            if (maxv >= 0.1) {
                 _detected = {(float)maxx / output->dims->data[3], (float)maxy / output->dims->data[2], true};
                 xSemaphoreGive(_signal);
+                serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f\n", _detected.x, _detected.y, maxv);
             }
             else {
                 _detected = {0, 0, false};

@@ -8,5 +8,5 @@ void DetectedObject::serialize(String &out) {
     out += y;
     out += ",\"detected\":";
     out += detected;
-    out += "\"}";
+    out += "}";
 }
