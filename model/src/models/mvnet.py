@@ -92,7 +92,7 @@ class SpatialPyramidPool(nn.Module):
         super().__init__()
 
         self.convin = nn.Conv2d(in_ch, mid_ch, kernel_size=1)
-        self.pool = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
+        self.pool = nn.MaxPool2d(kernel_size=5, stride=1, padding=2)
         self.convmid = nn.Conv2d(mid_ch * 4, mid_ch, kernel_size=1)
         self.se = SqueezeExcitation(mid_ch, max(mid_ch // 4, 4), activation=nn.ReLU6)
         self.act = nn.ReLU6()
