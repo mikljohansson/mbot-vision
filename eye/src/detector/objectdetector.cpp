@@ -175,19 +175,29 @@ void ObjectDetector::run() {
 
             TfLiteTensor* output = interpreter->output(0);
 
-            // Process the inference results.
-            /*
-            int8_t person_score = output->data.uint8[kPersonIndex];
-            int8_t no_person_score = output->data.uint8[kNotAPersonIndex];
+            // Process the inference results
+            int maxx = 0, maxy = 0;
+            float maxv = -1.0;
 
-            float person_score_f = 
-                (person_score - output->params.zero_point) * output->params.scale;
-            float no_person_score_f =
-                (no_person_score - output->params.zero_point) * output->params.scale;
+            for (int y = 0; y < output->dims->data[2]; y++) {
+                for (int x = 0; x < output->dims->data[3]; x++) {
+                    float val = output->data.uint8[y * output->dims->data[3] + x];
 
-            serialPrint("Person detection scores: %f yes, %f no\n", person_score_f, no_person_score_f);
-            delay(1000);
-            */
+                    if (val > maxv) {
+                        maxv = val;
+                        maxx = x;
+                        maxy = y;
+                    }
+                }
+            }
+
+            if (maxv >= 1.0) {
+                _detected = {(float)maxx / output->dims->data[3], (float)maxy / output->dims->data[2], true};
+                xSemaphoreGive(_signal);
+            }
+            else {
+                _detected = {0, 0, false};
+            }
 
             _framerate.tick();
         }
