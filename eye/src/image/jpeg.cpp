@@ -5,7 +5,7 @@
 #include <tjpgd.h>
 
 // Downscale 1/4 (1 << 2)
-#define JPEG_SCALE_FACTOR   2
+#define JPEG_SCALE_FACTOR   3
 
 JpegDecoder::JpegDecoder() {
     _output = 0;

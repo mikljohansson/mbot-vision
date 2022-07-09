@@ -96,10 +96,9 @@ class LeakySigmoid(nn.Module):
     """
     def __init__(self):
         super(LeakySigmoid, self).__init__()
-        self.act = nn.Sigmoid()
 
     def forward(self, x):
-        return self.act(x) + x * 0.001
+        return torch.sigmoid(x) + x * 0.001
 
 
 class BiasedSqueezeAndExcitation(torch.nn.Module):
@@ -174,13 +173,12 @@ class MVNetModel(nn.Module):
         super().__init__()
 
         self.stem = nn.Sequential(
-            Downsample(),                       # 80x60
             nn.Conv2d(3, 4, kernel_size=1),
             nn.BatchNorm2d(4),
         )
 
         self.backbone = nn.Sequential(
-            # 160x120 input
+            # 80x60 input
 
             DownsampleConv(4, 8),               # 40x30
             SpatialPyramidPool(8),

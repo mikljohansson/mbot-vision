@@ -18,8 +18,8 @@ MODEL ?= mvnet_micro
 DEPLOY ?= no
 
 # Model input and output dimensions
-INPUT_WIDTH	= 160
-INPUT_HEIGHT = 120
+INPUT_WIDTH	= 80
+INPUT_HEIGHT = 60
 
 # YOLOv6 trains with total batch size 64-256 for 500k-2M optimization steps (400 epochs) on COCO dataset (328k images, 80 classes)
 COCO_EPOCHS ?= 200

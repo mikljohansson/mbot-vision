@@ -2,7 +2,7 @@ from src.models.mvnet import MVNetModel
 
 model = dict(
     type=MVNetModel,
-    input_size=(160, 120),  # WxH
+    input_size=(80, 60),    # WxH
     output_size=(20, 15),   # WxH
 )
 
