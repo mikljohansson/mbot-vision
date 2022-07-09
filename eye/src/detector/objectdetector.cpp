@@ -208,8 +208,8 @@ void ObjectDetector::run() {
             if (probability >= 0.1) {
                 _detected = {(float)maxx / output->dims->data[3], (float)maxy / output->dims->data[2], true};
                 xSemaphoreGive(_signal);
-                serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f (decompress %dms, inference %dms)\n", 
-                    _detected.x, _detected.y, probability, decompress.took(), inference.took());
+                serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f (decompress %dms, inference %dms, total %dms)\n", 
+                    _detected.x, _detected.y, probability, decompress.took(), inference.took(), frame.took());
             }
             else {
                 _detected = {0, 0, false};

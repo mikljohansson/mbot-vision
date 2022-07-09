@@ -66,6 +66,11 @@ class DetectionHead(nn.Module):
         return x
 
 
+class Downsample(nn.UpsamplingBilinear2d):
+    def __init__(self):
+        super().__init__(scale_factor=0.5)
+
+
 class DownsampleConv(nn.Sequential):
     def __init__(self, in_ch, out_ch):
         super().__init__(
@@ -169,6 +174,7 @@ class MVNetModel(nn.Module):
         super().__init__()
 
         self.stem = nn.Sequential(
+            Downsample(),                       # 80x60
             nn.Conv2d(3, 4, kernel_size=1),
             nn.BatchNorm2d(4),
         )
@@ -176,7 +182,6 @@ class MVNetModel(nn.Module):
         self.backbone = nn.Sequential(
             # 160x120 input
 
-            DownsampleConv(4, 4),               # 80x60
             DownsampleConv(4, 8),               # 40x30
             SpatialPyramidPool(8),
 
