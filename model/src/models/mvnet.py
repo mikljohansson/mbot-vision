@@ -3,7 +3,7 @@ import torch
 from scipy import signal
 from torch import nn
 import torch.nn.functional as F
-from torchvision.ops.misc import ConvNormActivation
+from torchvision.ops.misc import ConvNormActivation, SqueezeExcitation
 
 
 class ResidualBlock(nn.Sequential):
@@ -20,25 +20,6 @@ class UpsampleInterpolate2d(nn.Module):
 
     def forward(self, x):
         return F.interpolate(x, scale_factor=2, mode='nearest')
-
-
-class SegmentationNeck(nn.Module):
-    def __init__(self, in_ch):
-        super().__init__()
-
-        self.upsample = nn.Sequential(
-            UpsampleInterpolate2d(),
-            nn.Conv2d(in_ch, in_ch, kernel_size=3, padding=1, groups=in_ch, bias=False),
-            nn.Conv2d(in_ch, 16, kernel_size=1),
-
-            UpsampleInterpolate2d(),
-            nn.Conv2d(16, 16, kernel_size=3, padding=1, groups=16, bias=False),
-            nn.Conv2d(16, 1, kernel_size=1),
-        )
-
-    def forward(self, x):
-        x = self.upsample(x)
-        return x
 
 # https://stackoverflow.com/questions/60534909/gaussian-filter-in-pytorch
 # Define 2D Gaussian kernel
@@ -75,30 +56,85 @@ class DetectionHead(nn.Module):
         return x
 
 
-class MobileNetModel(nn.Module):
-    """
-    Based on MobileNet v3 with an image segmentation head
-    """
+class DownsampleConv(nn.Sequential):
+    def __init__(self, in_ch, out_ch):
+        super().__init__(
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, groups=in_ch, stride=2, bias=False),
+            nn.Conv2d(out_ch, out_ch, kernel_size=1) if in_ch != out_ch else nn.Identity(),
+            nn.BatchNorm2d(out_ch),
+        )
+
+class UpsampleConv(nn.Sequential):
+    def __init__(self, in_ch, out_ch):
+        super().__init__(
+            nn.Upsample(scale_factor=2),
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, groups=out_ch),
+            nn.BatchNorm2d(out_ch),
+        )
+
+class ResidualConv(nn.Sequential):
+    def __init__(self, in_ch):
+        super().__init__(
+            nn.Conv2d(in_ch, in_ch, kernel_size=3, padding=1, groups=in_ch, bias=False),
+            nn.GroupNorm(8, in_ch),
+            nn.Conv2d(in_ch, in_ch * 2, kernel_size=1),
+            SqueezeExcitation(in_ch * 2, in_ch // 2, activation=nn.ReLU6),
+            nn.ReLU6(),
+            nn.Conv2d(in_ch * 2, in_ch, kernel_size=1),
+        )
+
+    def forward(self, x):
+        return x + super().forward(x)
+
+
+class SpatialPyramidPool(nn.Module):
+    def __init__(self, in_ch, mid_ch):
+        super().__init__()
+
+        self.convin = nn.Conv2d(in_ch, mid_ch, kernel_size=1)
+        self.pool = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
+        self.convmid = nn.Conv2d(mid_ch * 4, mid_ch, kernel_size=1)
+        self.se = SqueezeExcitation(mid_ch, max(mid_ch // 4, 4), activation=nn.ReLU6)
+        self.act = nn.ReLU6()
+        self.convout = nn.Conv2d(mid_ch, in_ch, kernel_size=1)
+
+    def forward(self, x):
+        y1 = self.convin(x)
+        y2 = self.pool(y1)
+        y3 = self.pool(y2)
+        y4 = self.pool(y3)
+
+        y = torch.cat([y1, y2, y3, y4], 1)
+        y = self.convmid(y)
+        y = self.se(y)
+        y = self.act(y)
+        y = self.convout(y)
+        return x + y
+
+class MVNetModel(nn.Module):
     def __init__(self, config):
         super().__init__()
 
-        self.backbone = config.backbone
+        self.stem = nn.Sequential(
+            nn.Conv2d(3, 4, kernel_size=1),
+            nn.BatchNorm2d(4),
+        )
 
-        # Remove the last channel expansion layer
-        del self.backbone.features[-1]
+        self.backbone = nn.Sequential(
+            # 160x120 input
 
-        # Remove the object detection head
-        del self.backbone.avgpool
-        del self.backbone.classifier
+            DownsampleConv(4, 4),               # 80x60
+            DownsampleConv(4, 8),               # 40x30
+            SpatialPyramidPool(8, 4),
 
-        # Switch all activations to use ReLU
-        for module in self.backbone.modules():
-            if isinstance(module, ConvNormActivation):
-                if type(module[-1]) in [nn.Hardswish, nn.LeakyReLU, nn.SiLU]:
-                    del module[-1]
-                    module.append(nn.ReLU())
+            DownsampleConv(8, 16),              # 20x15
+            SpatialPyramidPool(16, 8),
+            ResidualConv(16),
 
-        self.neck = SegmentationNeck(config.backbone_out_ch)
+            nn.BatchNorm2d(16),
+            nn.Conv2d(16, 1, kernel_size=1),
+        )
+
         self.head = nn.Identity()
 
         self.mean2x = torch.nn.Parameter(2. * torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1), requires_grad=False)
@@ -111,8 +147,8 @@ class MobileNetModel(nn.Module):
         # https://www.wolframalpha.com/input?i=simplify+%28%28x+-+m%29+%2F+s+-+0.5%29+%2F+0.5
         x = (2. * x - self.mean2x) / self.std - 1.
 
-        x = self.backbone.features(x)
-        x = self.neck(x)
+        x = self.stem(x)
+        x = self.backbone(x)
         x = self.head(x)
         return x
 

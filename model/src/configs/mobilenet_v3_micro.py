@@ -16,15 +16,15 @@ def _mobilenet_v3_micro_conf(width_mult: float = 1.0, reduced_tail: bool = False
 
     inverted_residual_setting = [
         bneck_conf(8, 3, 8, 8, True, "RE", 2, 1),  # C1
-        bneck_conf(8, 3, 16, 16, False, "RE", 2, 1),  # C2
-        bneck_conf(16, 3, 32, 24, False, "RE", 2, 1),  # C3
-        bneck_conf(24, 3, 72, 24, True, "RE", 1, 1),
-        bneck_conf(24, 3, 72, 24, True, "RE", 1, 1),
-        bneck_conf(24, 3, 72, 64 // reduce_divider, True, "RE", 2, dilation),  # C4
-        bneck_conf(64 // reduce_divider, 3, 128 // reduce_divider, 64 // reduce_divider, True, "RE", 1, dilation),
-        bneck_conf(64 // reduce_divider, 3, 128 // reduce_divider, 64 // reduce_divider, True, "RE", 1, dilation),
+        bneck_conf(8, 3, 8, 8, False, "RE", 2, 1),  # C2
+        bneck_conf(8, 3, 16, 16, False, "RE", 2, 1),  # C3
+        bneck_conf(16, 3, 32, 16, True, "RE", 1, 1),
+        bneck_conf(16, 3, 32, 16, True, "RE", 1, 1),
+        bneck_conf(16, 3, 32, 32 // reduce_divider, True, "RE", 2, dilation),  # C4
+        bneck_conf(32 // reduce_divider, 3, 64 // reduce_divider, 32 // reduce_divider, True, "RE", 1, dilation),
+        bneck_conf(32 // reduce_divider, 3, 64 // reduce_divider, 32 // reduce_divider, True, "RE", 1, dilation),
     ]
-    last_channel = adjust_channels(64 // reduce_divider)  # C5
+    last_channel = adjust_channels(32 // reduce_divider)  # C5
 
     return inverted_residual_setting, last_channel
 
