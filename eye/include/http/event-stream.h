@@ -52,7 +52,7 @@ class EventStream {
                 _framerate.tick();
 
                 if (!_client.connected()) {
-                    Serial.print("HTTP event stream disconnected");
+                    Serial.println("HTTP event stream disconnected");
                     break;
                 }
             }
