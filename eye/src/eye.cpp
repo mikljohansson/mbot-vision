@@ -22,7 +22,7 @@ typedef struct _WifiNetwork {
 } WifiNetwork;
 
 static WifiNetwork wifiNetworks[] = {
-    {"krokodil", "mistress"},
+    {"krokodil-ap2", "mistress"},
     {"dlink-BF60", "ptfmm78341"},
 };
 
