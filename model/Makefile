@@ -89,7 +89,10 @@ $(EXPERIMENT)/recorded.pth:
 $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
 	PYTHONPATH=. python src/convert.py -m $< -d dataset/recorded/train
 
-output/mbot-vision-model.cpp: $(EXPERIMENT)/recorded.tflite
+$(EXPERIMENT)/recorded.tmdl: $(EXPERIMENT)/recorded.tflite
+	python ../../TinyMaix/tools/tflite2tmdl.py $< $@ int8 0 $(INPUT_HEIGHT),$(INPUT_WIDTH),3 $(OUTPUT_HEIGHT),$(OUTPUT_WIDTH),1
+
+output/mbot-vision-model.cpp: $(EXPERIMENT)/recorded.tmdl
 	mkdir -p output
 
 	cp $< output/mbot-vision-model
