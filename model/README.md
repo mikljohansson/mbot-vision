@@ -9,6 +9,7 @@ sudo apt-get install ffmpeg
 
 pip install torch==1.11.0 torchvision --extra-index-url https://download.pytorch.org/whl/cu113
 pip install -r https://raw.githubusercontent.com/ultralytics/yolov5/master/requirements.txt
+pip install nvidia-pyindex
 pip install -r requirements.txt
 ```
 

@@ -14,3 +14,9 @@ opencv-python
 tflite
 scipy
 yolov5
+
+onnx-graphsurgeon
+onnxruntime
+onnxsim
+simple_onnx_processing_tools
+onnx2tf
