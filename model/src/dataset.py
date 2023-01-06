@@ -57,4 +57,8 @@ class ImageDataset(Dataset):
                                         cv2.MORPH_GRADIENT, self.gradient_kernel, iterations=1)
         unknown_mask = torch.tensor(unknown_mask, dtype=torch.float32) / 255
 
+        # Change to range [-1, 1]
+        image = image * 2. - 1.
+        target = target * 2. - 1.
+
         return image, target, unknown_mask

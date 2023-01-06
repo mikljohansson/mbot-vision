@@ -141,8 +141,12 @@ def downsample_like(t, like, mode='bilinear'):
 
 
 def upsample_like(t, like, mode='bilinear'):
+    # Change to range [0, 1]
+    t = (t + 1.) / 2.
+
     if t.shape[-2:] != like.shape[-2:]:
         return torch.nn.functional.interpolate(t, size=like.shape[-2:], mode=mode, align_corners=(False if mode != 'nearest' else None))
+    
     return t
 
 
