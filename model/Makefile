@@ -12,6 +12,9 @@ EXPERIMENT ?= $(LOGGING_PATH)
 #ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision fp16
 ACCELERATE_ARGS := --mixed_precision fp16
 
+INFERENCE_ENGINE ?= TFMICRO
+#INFERENCE_ENGINE ?= TINYMAIX
+
 #MODEL ?= yolov6p
 #MODEL ?= mobilenet_v3_micro
 #MODEL ?= mvnet_micro
@@ -89,9 +92,9 @@ $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
 output/mbot-vision-model.cpp: $(EXPERIMENT)/recorded.tflite
 	mkdir -p output
 
-	cp $< output/mbot-vision-model.tflite
-	cd output && xxd -i mbot-vision-model.tflite $(notdir $@)
-	rm -f output/mbot-vision-model.tflite
+	cp $< output/mbot-vision-model
+	cd output && xxd -i mbot-vision-model $(notdir $@)
+	rm -f output/mbot-vision-model
 
 	sed -i 's/unsigned char/#include "mbot-vision-model.h"\n\nalignas\(8\) const unsigned char/g' $@
 	sed -i 's/unsigned int/const unsigned int/g' $@
@@ -101,6 +104,7 @@ output/mbot-vision-model.cpp: $(EXPERIMENT)/recorded.tflite
 	sed -i 's/<INPUT_HEIGHT>/$(INPUT_HEIGHT)/g' $(dir $@)/mbot-vision-model.h
 	sed -i 's/<OUTPUT_WIDTH>/$(OUTPUT_WIDTH)/g' $(dir $@)/mbot-vision-model.h
 	sed -i 's/<OUTPUT_HEIGHT>/$(OUTPUT_HEIGHT)/g' $(dir $@)/mbot-vision-model.h
+	sed -i 's/<INFERENCE_ENGINE>/$(INFERENCE_ENGINE)/g' $(dir $@)/mbot-vision-model.h
 
 train: output/mbot-vision-model.cpp
 

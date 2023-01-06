@@ -6,8 +6,6 @@
 #include "image/jpeg.h"
 #include "framerate.h"
 
-class TfLiteTensor;
-
 class ObjectDetector : public Detector {
     private:
         TaskHandle_t _task;
@@ -16,9 +14,7 @@ class ObjectDetector : public Detector {
         DetectedObject _detected;
         SemaphoreHandle_t _signal;
 
-        TfLiteTensor *_input;
-
-        uint8_t *_lastoutputbuf;
+        int8_t *_lastoutputbuf;
 
     public:
         ObjectDetector();
