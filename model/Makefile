@@ -29,7 +29,7 @@ COCO_LEARNING_RATE ?= 1e-4
 COCO_MODEL_PATH ?= $(EXPERIMENT)/coco.pth
 
 # 10k optimization steps seems to be fine for this little model
-REC_EPOCHS ?= 1500
+REC_EPOCHS ?= 1
 REC_BATCH_SIZE ?= 64
 REC_ACCUMULATION_STEPS ?= 1
 REC_LEARNING_RATE ?= 1e-4

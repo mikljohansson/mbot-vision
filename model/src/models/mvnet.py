@@ -62,7 +62,7 @@ class DetectionHead(nn.Module):
     def forward(self, x):
         x = self.act(x)
         x = self.conv1(x) / (3**2) * 0.7 + self.conv2(x) / (5**2) * 0.2 + self.conv3(x) / (7**2) * 0.1
-        x = torch.log(x + 1.)
+        #x = torch.log(x + 1.)
         return x
 
 

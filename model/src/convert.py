@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import onnx
 import tensorflow as tf
-from onnx_tf.backend import prepare
+from onnx2tf import convert
 
 from src.dataset import ImageDataset
 from src.model import create_model
@@ -18,7 +18,7 @@ parser.add_argument("-m", "--model", type=str, default=None, help="Input model i
 parser.add_argument("-d", "--dataset", required=True, help="Directory of sample images")
 args = parser.parse_args()
 
-checkpoint = torch.load(args.model)
+checkpoint = torch.load(args.model, map_location=torch.device('cpu'))
 model, cfg = create_model(checkpoint['model'])
 model.load_state_dict(checkpoint['state'])
 model.deploy()
@@ -58,12 +58,9 @@ def representative_dataset_gen():
         if step >= num_calibration_steps:
             break
 
-    out = np.asarray(images, np.float32)
-    print(out.shape, out.dtype)
-    np.save(np_input0_path, out)
-representative_dataset_gen()
+    return np.asarray(images, np.float32)
 
-from onnx2tf import convert
+np.save(np_input0_path, representative_dataset_gen())
 mean = np.asarray([[[[0.485, 0.456, 0.406]]]], np.float32)
 std = np.asarray([[[[0.229, 0.224, 0.225]]]], np.float32)
 

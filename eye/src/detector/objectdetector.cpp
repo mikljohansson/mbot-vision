@@ -27,15 +27,15 @@ static void cropAndQuantizeImage(const uint8_t *pixels, size_t image_width, size
     const uint8_t* source = pixels + (top * image_width + left) * 3;
     const size_t pixel_count = MBOT_VISION_MODEL_INPUT_WIDTH * MBOT_VISION_MODEL_INPUT_HEIGHT;
 
-    // Input is stored in HWC format, target needs to be CHW format
+    // Input and target is stored in HWC format
 
     for (size_t y = 0; y < MBOT_VISION_MODEL_INPUT_HEIGHT; y++) {
         for (size_t x = 0; x < MBOT_VISION_MODEL_INPUT_WIDTH; x++) {
-            target[0] = source[0];
-            target[pixel_count] = source[1];
-            target[pixel_count * 2] = source[2];
+            target[0] = ((int)source[0]) - 127;
+            target[1] = ((int)source[1]) - 127;
+            target[2] = ((int)source[2]) - 127;
             
-            target++;
+            target += 3;
             source += 3;
         }
 
@@ -127,10 +127,10 @@ void ObjectDetector::begin() {
 
     if ((_input->dims->size != 4) || 
         (_input->dims->data[0] != 1) ||
-        (_input->dims->data[1] != 3) || 
-        (_input->dims->data[2] != MBOT_VISION_MODEL_INPUT_HEIGHT) ||
-        (_input->dims->data[3] != MBOT_VISION_MODEL_INPUT_WIDTH) ||
-        (_input->type != kTfLiteUInt8)) {
+        (_input->dims->data[1] != MBOT_VISION_MODEL_INPUT_HEIGHT) ||
+        (_input->dims->data[2] != MBOT_VISION_MODEL_INPUT_WIDTH) ||
+        (_input->dims->data[3] != 3) || 
+        (_input->type != kTfLiteInt8)) {
         TF_LITE_REPORT_ERROR(error_reporter,
                             "The models input tensor shape and type doesn't match what's expected by objectdetector.cc");
         return;
@@ -187,9 +187,9 @@ void ObjectDetector::run() {
             int maxx = 0, maxy = 0;
             int maxv = -1.0;
 
-            for (int y = 0; y < output->dims->data[2]; y++) {
-                for (int x = 0; x < output->dims->data[3]; x++) {
-                    int val = output->data.uint8[y * output->dims->data[3] + x];
+            for (int y = 0; y < output->dims->data[1]; y++) {
+                for (int x = 0; x < output->dims->data[2]; x++) {
+                    int val = output->data.int8[y * output->dims->data[2] + x];
 
                     if (val > maxv) {
                         maxv = val;
@@ -200,13 +200,13 @@ void ObjectDetector::run() {
             }
 
             if (!_lastoutputbuf) {
-                _lastoutputbuf = new uint8_t[output->dims->data[2] * output->dims->data[3]];
+                _lastoutputbuf = new uint8_t[output->dims->data[1] * output->dims->data[2]];
             }
-            memcpy(_lastoutputbuf, output->data.uint8, output->dims->data[2] * output->dims->data[3]);
+            memcpy(_lastoutputbuf, output->data.uint8, output->dims->data[1] * output->dims->data[2]);
 
             float probability = (float)maxv / 255;
             if (probability >= 0.1) {
-                _detected = {(float)maxx / output->dims->data[3], (float)maxy / output->dims->data[2], true};
+                _detected = {(float)maxx / output->dims->data[2], (float)maxy / output->dims->data[1], true};
                 xSemaphoreGive(_signal);
                 serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f (decompress %dms, inference %dms, total %dms)\n", 
                     _detected.x, _detected.y, probability, decompress.took(), inference.took(), frame.took());
@@ -228,11 +228,11 @@ void ObjectDetector::draw(uint8_t *pixels, size_t width, size_t height) {
     }
 
     TfLiteTensor* output = interpreter->output(0);
-    size_t offset = width / 2 - output->dims->data[3] / 2 + (height / 2 - output->dims->data[2] / 2) * width;
+    size_t offset = width / 2 - output->dims->data[2] / 2 + (height / 2 - output->dims->data[1] / 2) * width;
 
-    for (int y = 0; y < output->dims->data[2]; y++) {
-        for (int x = 0; x < output->dims->data[3]; x++) {
-            uint8_t val = _lastoutputbuf[y * output->dims->data[3] + x];
+    for (int y = 0; y < output->dims->data[1]; y++) {
+        for (int x = 0; x < output->dims->data[2]; x++) {
+            uint8_t val = _lastoutputbuf[y * output->dims->data[2] + x];
             size_t pos = (offset + y * width + x) * 3;
             pixels[pos] = pixels[pos + 1] = pixels[pos + 2] = val;
         }
