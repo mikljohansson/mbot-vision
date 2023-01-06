@@ -21,7 +21,7 @@ class DenseBlock(nn.Sequential):
 
     def forward(self, x):
         y = super().forward(x)
-        return x#torch.cat([x, y], dim=1)
+        return torch.cat([x, y], dim=1)
 
 
 class UpsampleInterpolate2d(nn.Module):

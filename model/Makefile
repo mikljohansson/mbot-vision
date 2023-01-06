@@ -14,12 +14,15 @@ ACCELERATE_ARGS := --mixed_precision fp16
 
 #MODEL ?= yolov6p
 #MODEL ?= mobilenet_v3_micro
-MODEL ?= mvnet_micro
+#MODEL ?= mvnet_micro
+MODEL ?= tmnet_micro
 DEPLOY ?= no
 
 # Model input and output dimensions
 INPUT_WIDTH	= 80
 INPUT_HEIGHT = 60
+OUTPUT_WIDTH = 20
+OUTPUT_HEIGHT = 15
 
 # YOLOv6 trains with total batch size 64-256 for 500k-2M optimization steps (400 epochs) on COCO dataset (328k images, 80 classes)
 COCO_EPOCHS ?= 200
@@ -96,6 +99,8 @@ output/mbot-vision-model.cpp: $(EXPERIMENT)/recorded.tflite
 	cp src/cpp/mbot-vision-model.h $(dir $@)
 	sed -i 's/<INPUT_WIDTH>/$(INPUT_WIDTH)/g' $(dir $@)/mbot-vision-model.h
 	sed -i 's/<INPUT_HEIGHT>/$(INPUT_HEIGHT)/g' $(dir $@)/mbot-vision-model.h
+	sed -i 's/<OUTPUT_WIDTH>/$(OUTPUT_WIDTH)/g' $(dir $@)/mbot-vision-model.h
+	sed -i 's/<OUTPUT_HEIGHT>/$(OUTPUT_HEIGHT)/g' $(dir $@)/mbot-vision-model.h
 
 train: output/mbot-vision-model.cpp
 
