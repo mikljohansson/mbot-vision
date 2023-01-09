@@ -55,6 +55,7 @@ ObjectDetector::~ObjectDetector() {
 }
 
 void ObjectDetector::begin() {
+    Serial.println("Initializing tflite");
     tensor_arena = new uint8_t[kTensorArenaSize];
 
     tflite::InitializeTarget();
@@ -139,6 +140,7 @@ void ObjectDetector::begin() {
     }
 
     xTaskCreatePinnedToCore(runStatic, "objectDetector", 10000, this, 1, &_task, 1);
+    Serial.println("Tflite successfully initialized");
 }
 
 DetectedObject ObjectDetector::wait() {

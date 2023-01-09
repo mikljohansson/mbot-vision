@@ -12,6 +12,7 @@ static TaskHandle_t cameraTask;
 static Framerate framerate("Camera framerate: %02f\n");
 
 // https://github.com/geeksville/Micro-RTSP/blob/master/src/OV2640.cpp
+// https://randomnerdtutorials.com/esp32-cam-ai-thinker-pinout/
 camera_config_t mv_camera_aithinker_config {
     .pin_pwdn = 32,
     .pin_reset = -1,
@@ -130,7 +131,7 @@ void FrameBufferQueue::expire() {
 
 void Camera::run() {
     // Initialize camera
-    Serial.println("Init camera");
+    Serial.println("Initializing camera");
     while (true) {
         esp_err_t err = esp_camera_init(&mv_camera_aithinker_config);
         if (err == ESP_OK) {
@@ -138,9 +139,11 @@ void Camera::run() {
         }
 
         serialPrint("Camera probe failed with error 0x%x", err);
+        Serial.print(".");
         delay(250);
     }
 
+    Serial.println("Camera successfully initialized");
     framerate.init();
 
     while (true) {

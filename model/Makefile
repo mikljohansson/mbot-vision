@@ -14,6 +14,7 @@ ACCELERATE_ARGS := --mixed_precision fp16
 
 INFERENCE_ENGINE ?= TFMICRO
 #INFERENCE_ENGINE ?= TINYMAIX
+INFERENCE_EXTENSION = $(shell echo $(INFERENCE_ENGINE) | sed s/TINYMAIX/tmdl/ | sed s/TFMICRO/tflite/)
 
 #MODEL ?= yolov6p
 #MODEL ?= mobilenet_v3_micro
@@ -92,7 +93,7 @@ $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
 $(EXPERIMENT)/recorded.tmdl: $(EXPERIMENT)/recorded.tflite
 	python ../../TinyMaix/tools/tflite2tmdl.py $< $@ int8 0 $(INPUT_HEIGHT),$(INPUT_WIDTH),3 $(OUTPUT_HEIGHT),$(OUTPUT_WIDTH),1
 
-output/mbot-vision-model.cpp: $(EXPERIMENT)/recorded.tmdl
+output/mbot-vision-model.cpp: $(EXPERIMENT)/recorded.$(INFERENCE_EXTENSION)
 	mkdir -p output
 
 	cp $< output/mbot-vision-model

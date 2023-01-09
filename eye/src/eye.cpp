@@ -54,7 +54,9 @@ void setup() {
     Serial.println("Starting up");
     Serial.printf("Core %d, clock %d MHz\n", xPortGetCoreID(), getCpuFrequencyMhz());
     serialPrint("Total heap: %d\n", ESP.getHeapSize());
+    serialPrint("Free heap: %d\n", ESP.getFreeHeap());
     serialPrint("Total PSRAM: %d\n", ESP.getPsramSize());
+    serialPrint("Free PSRAM: %d\n", ESP.getFreePsram());
     
     // Initialize display
     if (!LOG_TO_SDCARD) {

@@ -1,3 +1,21 @@
+# Wiring
+
+## FDTI programmer
+
+The ESP32 unfortunately doesn't have a RST pin, so in order to get the programmer to automatically put the 
+ESP32 into programming/flashing mode you need to solder a wire onto the inner connector of the RST button 
+and connect that to the RTS pin on the FTDI programmer. Doing this will allow you to upload new firmware
+without having to manually hold down the I00 and press the RST button.
+
+|Programmer|ESP32 CAM|
+|----------|---------|
+|5V        |5V       |
+|GND       |GND      |
+|TXD       |U0R      |
+|RXD       |U0T      |
+|DTR       |I00      |
+|RTS       |RST      |
+
 # Setup
 
 You need to prepare the ESP32 specific tflite-micro distribution a bit in order to make it usable from PlatformIO
