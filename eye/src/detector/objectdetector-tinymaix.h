@@ -130,13 +130,12 @@ void ObjectDetector::run() {
 
             uint8_t *pixels = _decoder.getOutputFrame();
             size_t width = _decoder.getOutputWidth(), height = _decoder.getOutputHeight();
+            BenchmarkTimer inference;
 
             // Copy frame to input tensor
             cropAndQuantizeImage(pixels, width, height, _input);
 
             // Run the model on this input and make sure it succeeds.
-            BenchmarkTimer inference;
-
             tm_mat_t outs = {3, MBOT_VISION_MODEL_OUTPUT_HEIGHT, MBOT_VISION_MODEL_OUTPUT_WIDTH, 1, {(mtype_t*)_output}};
             tm_err_t res = tm_run(&mdl, _in, &outs);
 

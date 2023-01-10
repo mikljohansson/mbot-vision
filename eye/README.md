@@ -38,7 +38,7 @@ find components/esp-nn -name '*esp32s3*' -exec rm -f {} ';'
 for f in components/tflite-lib/tensorflow/lite/micro/kernels/esp_nn/*.cc; do rm components/tflite-lib/tensorflow/lite/micro/kernels/`basename $f`; done
 ```
 
-# Seting up /dev aliases
+# Setting up /dev aliases
 
 https://medium.com/@darshankt/setting-up-the-udev-rules-for-connecting-multiple-external-devices-through-usb-in-linux-28c110cf9251
 ```
@@ -57,3 +57,15 @@ sudo systemctl stop brltty
 
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
+
+# Common issues
+
+## Invalid/corrupt model file
+
+```
+Initializing tflite
+
+Guru Meditation Error: Core  1 panic'ed (LoadProhibited). Exception was unhandled.
+```
+
+This probably means that the tflite file that is encoded into the model buffer in `mbot-vision-model.cpp` is not a valid for some reason.
