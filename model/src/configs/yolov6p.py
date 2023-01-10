@@ -1,4 +1,4 @@
-from src.models.yolo import YOLOv6Model
+from src.models.yolov6 import YOLOv6Model
 
 model = dict(
     type=YOLOv6Model,

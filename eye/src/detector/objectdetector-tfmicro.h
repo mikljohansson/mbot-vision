@@ -88,8 +88,9 @@ void ObjectDetector::begin() {
         // NOLINTNEXTLINE(runtime-global-variables)
 
         // NOTE: Don't forget to change the max number of ops in the template
-        static tflite::MicroMutableOpResolver<22> micro_op_resolver;
+        static tflite::MicroMutableOpResolver<23> micro_op_resolver;
         micro_op_resolver.AddAdd();
+        //micro_op_resolver.AddBatchMatMul();
         micro_op_resolver.AddConcatenation();
         micro_op_resolver.AddConv2D();
         micro_op_resolver.AddDepthwiseConv2D();
@@ -106,6 +107,7 @@ void ObjectDetector::begin() {
         micro_op_resolver.AddReshape();
         micro_op_resolver.AddResizeNearestNeighbor();
         micro_op_resolver.AddRsqrt();
+        micro_op_resolver.AddSoftmax();
         micro_op_resolver.AddSplit();
         micro_op_resolver.AddSquaredDifference();
         micro_op_resolver.AddSub();

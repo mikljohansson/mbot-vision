@@ -16,10 +16,12 @@ INFERENCE_ENGINE ?= TFMICRO
 #INFERENCE_ENGINE ?= TINYMAIX
 INFERENCE_EXTENSION = $(shell echo $(INFERENCE_ENGINE) | sed s/TINYMAIX/tmdl/ | sed s/TFMICRO/tflite/)
 
-#MODEL ?= yolov6p
+#MODEL ?= mobilenet_v3_small
 #MODEL ?= mobilenet_v3_micro
-#MODEL ?= mvnet_micro
-MODEL ?= tmnet_micro
+MODEL ?= mvnet_micro
+#MODEL ?= tmnet_micro
+#MODEL ?= yolov6p
+
 DEPLOY ?= no
 
 # Model input and output dimensions

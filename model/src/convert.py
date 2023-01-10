@@ -8,6 +8,7 @@ import onnx
 import tensorflow as tf
 from onnx2tf import convert
 
+from src.convert_onnx_int64 import convert_model_to_int32
 from src.dataset import ImageDataset
 from src.model import create_model
 
@@ -27,12 +28,16 @@ model.eval()
 dataset = ImageDataset(args.dataset, target_size=cfg.model.output_size)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
 
-# Convert to ONNX and TFLite
+# Convert to ONNX
 inputs, _, _ = next(iter(dataloader))
 onnx_model_path = os.path.splitext(args.model)[0] + '.onnx'
-torch.onnx.export(model, inputs, onnx_model_path,
+torch.onnx.export(model, inputs, onnx_model_path + '.int64',
                   opset_version=12, export_params=True, verbose=False,
                   input_names=['input'], output_names=['output'])
+
+# Convert INT64 tensors to INT32
+#convert_model_to_int32(onnx_model_path + '.int64', onnx_model_path)
+shutil.copyfile(onnx_model_path + '.int64', onnx_model_path)
 
 # Verify the ONNX model
 onnx_model = onnx.load(onnx_model_path)

@@ -1,10 +1,11 @@
-from torchvision.models.mobilenetv3 import mobilenet_v3_small
+from torchvision.models import mobilenet_v3_small
 
 from src.models.mobilenet import MobileNetModel
 
 model = dict(
     type=MobileNetModel,
     backbone=mobilenet_v3_small(pretrained=True),
+    backbone_out_ch=96,
     pretrained=True,
     input_size=(160, 120),  # WxH
     output_size=(20, 16),   # WxH
