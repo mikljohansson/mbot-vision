@@ -40,9 +40,18 @@ def gkern(kernlen=256, std=128):
     gkern2d = np.outer(gkern1d, gkern1d)
     return torch.tensor(gkern2d)
 
+
 class DilatedGaussianFilter(nn.Module):
-    def __init__(self, kernel_size=3, dilation=1):
+    def __init__(self, kernel_size, dilation):
         super().__init__()
+        self.conv = nn.Conv2d(1, 1, kernel_size=kernel_size, dilation=dilation,
+                              padding=(kernel_size * dilation - dilation) // 2)
+        self.conv.weight.data[:] = gkern(kernel_size, 2).unsqueeze(0).unsqueeze(0).to(dtype=torch.float32)
+        self.divisor = kernel_size ** 2
+
+    def forward(self, x):
+        return self.conv(x) / self.divisor
+
 
 class DetectionHead(nn.Module):
     def __init__(self):
@@ -50,20 +59,14 @@ class DetectionHead(nn.Module):
 
         self.act = nn.Sigmoid()
 
-        self.conv1 = self.create_conv(3, 1)
-        self.conv2 = self.create_conv(5, 1)
-        self.conv3 = self.create_conv(7, 1)
-
-    def create_conv(self, kernel_size, dilation):
-        conv = nn.Conv2d(1, 1, kernel_size=kernel_size, dilation=dilation,
-                         padding=(kernel_size * dilation - dilation) // 2)
-        conv.weight.data[:] = gkern(kernel_size, 2).unsqueeze(0).unsqueeze(0).to(dtype=torch.float32)
-        return conv
+        self.conv1 = DilatedGaussianFilter(3, 1)
+        self.conv2 = DilatedGaussianFilter(3, 2)
+        self.conv3 = DilatedGaussianFilter(5, 2)
+        self.conv4 = DilatedGaussianFilter(5, 3)
 
     def forward(self, x):
         x = self.act(x)
-        x = self.conv1(x) / (3**2) * 0.7 + self.conv2(x) / (5**2) * 0.2 + self.conv3(x) / (7**2) * 0.1
-        x = torch.log(x + 1.)
+        x = self.conv1(x) + self.conv2(x) + self.conv3(x) + self.conv4(x)
         return x
 
 
