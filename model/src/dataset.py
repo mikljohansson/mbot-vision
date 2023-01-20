@@ -59,6 +59,5 @@ class ImageDataset(Dataset):
 
         # Change to range [-1, 1]
         image = image * 2. - 1.
-        target = target * 2. - 1.
 
         return image, target, unknown_mask

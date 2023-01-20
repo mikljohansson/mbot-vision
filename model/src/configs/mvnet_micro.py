@@ -7,15 +7,15 @@ model = dict(
 )
 
 solver = dict(
-    optim='SGD',
+    optim='Adam',
     lr_scheduler='Cosine',
-    lr0=0.01,
-    lrf=0.01,
-    momentum=0.937,
-    weight_decay=0.0005,
-    warmup_epochs=3.0,
-    warmup_momentum=0.8,
-    warmup_bias_lr=0.1
+    lr0=1e-4,
+    lrf=1e-5,
+    momentum=0.9,
+    weight_decay=0.0,
+    warmup_epochs=100.0,
+    warmup_momentum=0.9,
+    warmup_bias_lr=1e-4
 )
 
 data_aug = dict(

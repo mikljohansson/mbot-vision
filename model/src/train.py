@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import torchvision
 from accelerate import Accelerator
 from ranger21 import Ranger21
+from torch.optim import AdamW
 from torch.utils.data import RandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -67,6 +68,9 @@ dataloader = accelerator.prepare(dataloader)
 #                      num_epochs=args.epochs,
 #                      num_batches_per_epoch=(len(dataloader) / args.accumulation_steps))
 
+optimizer = AdamW(model.parameters(),
+                  lr=args.learning_rate)
+
 def get_optimizer(cfg, model):
     accumulate = args.accumulation_steps
     cfg.solver.weight_decay *= args.batch_size * accumulate / 64
@@ -78,9 +82,9 @@ def get_lr_scheduler(cfg, optimizer):
     lr_scheduler, lf = build_lr_scheduler(cfg, optimizer, epochs)
     return lr_scheduler, lf
 
-optimizer = get_optimizer(cfg, model)
-lr_scheduler, lf = get_lr_scheduler(cfg, optimizer)
-lr_scheduler.last_epoch = -1    # start_epoch - 1
+#optimizer = get_optimizer(cfg, model)
+#lr_scheduler, lf = get_lr_scheduler(cfg, optimizer)
+#lr_scheduler.last_epoch = -1    # start_epoch - 1
 
 epoch = 0
 
@@ -95,16 +99,16 @@ def update_optimizer():
     global last_opt_step
     accumulate = args.accumulation_steps
 
-    if step <= warmup_steps:
-        # Use shorter accumulation steps during warmup
-        accumulate = max(1, np.interp(step, [0, warmup_steps], [1, args.accumulation_steps]).round())
-
-        # Use lower per parameter lr and momentum during warmup
-        for k, param in enumerate(optimizer.param_groups):
-            warmup_bias_lr = cfg.solver.warmup_bias_lr if k == 2 else 0.0
-            param['lr'] = np.interp(step, [0, warmup_steps], [warmup_bias_lr, param['initial_lr'] * lf(epoch)])
-            if 'momentum' in param:
-                param['momentum'] = np.interp(step, [0, warmup_steps], [cfg.solver.warmup_momentum, cfg.solver.momentum])
+    # if step <= warmup_steps:
+    #     # Use shorter accumulation steps during warmup
+    #     accumulate = max(1, np.interp(step, [0, warmup_steps], [1, args.accumulation_steps]).round())
+    #
+    #     # Use lower per parameter lr and momentum during warmup
+    #     for k, param in enumerate(optimizer.param_groups):
+    #         warmup_bias_lr = cfg.solver.warmup_bias_lr if k == 2 else 0.0
+    #         param['lr'] = np.interp(step, [0, warmup_steps], [warmup_bias_lr, param['initial_lr'] * lf(epoch)])
+    #         if 'momentum' in param:
+    #             param['momentum'] = np.interp(step, [0, warmup_steps], [cfg.solver.warmup_momentum, cfg.solver.momentum])
 
     if step - last_opt_step >= accumulate:
         optimizer.step()
@@ -112,7 +116,8 @@ def update_optimizer():
         pbar.update(1)
         last_opt_step = step
 
-model, optimizer, lr_scheduler = accelerator.prepare(model, optimizer, lr_scheduler)
+#model, optimizer, lr_scheduler = accelerator.prepare(model, optimizer, lr_scheduler)
+model, optimizer = accelerator.prepare(model, optimizer)
 
 # Tensorboard output
 logger.info(f'Results will be saved in {output_dir}')
@@ -141,16 +146,13 @@ def downsample_like(t, like, mode='bilinear'):
 
 
 def upsample_like(t, like, mode='bilinear'):
-    # Change to range [0, 1]
-    t = (t + 1.) / 2.
-
     if t.shape[-2:] != like.shape[-2:]:
         return torch.nn.functional.interpolate(t, size=like.shape[-2:], mode=mode, align_corners=(False if mode != 'nearest' else None))
     
     return t
 
 
-def calculate_loss(outputs, targets, unknown_mask, z_loss=1e-5):
+def calculate_loss(outputs, targets, unknown_mask, z_loss=1e-4):
     alpha_loss = F.binary_cross_entropy_with_logits(outputs, targets, reduction='none')
 
     if args.unknown_mask:
@@ -175,6 +177,9 @@ for epoch in range(args.epochs):
         outputs = model(inputs)
 
         loss, alpha_loss, z_loss = calculate_loss(outputs, targets, unknown_mask)
+        if math.isnan(loss):
+            logger.warning("Loss went to NaN")
+
         accelerator.backward(loss)
         step += 1
 
@@ -194,14 +199,15 @@ for epoch in range(args.epochs):
 
         if last_logged_image < time.time() - 1:
             last_logged_image = time.time()
-            output_target = upsample_like(targets[[0]], inputs[[0]], mode='nearest').detach().cpu()
-            output_unknown_mask = upsample_like(unknown_mask[[0]], inputs[[0]], mode='nearest').detach().cpu()
-            output_loss = upsample_like(normalize_loss(alpha_loss[[0]]), inputs[[0]], mode='nearest').detach().cpu()
-            output_masked_loss = upsample_like(normalize_loss(alpha_loss[[0]] * (1. - unknown_mask[[0]])), inputs[[0]], mode='nearest').detach().cpu()
-            output_mask = upsample_like(torch.sigmoid(outputs[[0]]), inputs[[0]], mode='nearest').detach().cpu()
+            input_image = (inputs[0].detach().cpu() + 1.) / 2.
+            output_target = upsample_like(targets[[0]], input_image[0], mode='nearest').detach().cpu()
+            output_unknown_mask = upsample_like(unknown_mask[[0]], input_image[0], mode='nearest').detach().cpu()
+            output_loss = upsample_like(normalize_loss(alpha_loss[[0]]), input_image[0], mode='nearest').detach().cpu()
+            output_masked_loss = upsample_like(normalize_loss(alpha_loss[[0]] * (1. - unknown_mask[[0]])), input_image[0], mode='nearest').detach().cpu()
+            output_mask = upsample_like(torch.sigmoid(outputs[[0]]), input_image[0], mode='nearest').detach().cpu()
 
             cells = [
-                inputs[0].detach().cpu(),
+                input_image,
                 output_target[0].repeat(3, 1, 1),
                 output_unknown_mask[0].repeat(3, 1, 1),
 
@@ -212,7 +218,7 @@ for epoch in range(args.epochs):
 
             writer.add_image(f'{model_name}/sample', torchvision.utils.make_grid(cells, nrow=3), step)
 
-    lr_scheduler.step()
+    #lr_scheduler.step()
 
 pbar.close()
 

@@ -86,9 +86,9 @@ class DownsampleConv(nn.Sequential):
 
 
 class UpsampleConv(nn.Sequential):
-    def __init__(self, in_ch, out_ch):
+    def __init__(self, in_ch, out_ch, scale_factor=None, size=None):
         super().__init__(
-            nn.Upsample(scale_factor=2),
+            nn.Upsample(scale_factor=scale_factor, size=size),
             nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, groups=out_ch),
             nn.BatchNorm2d(out_ch),
         )
@@ -188,9 +188,10 @@ class ResidualConv(nn.Sequential):
 
         super().__init__(
             nn.Conv2d(in_ch, in_ch, kernel_size=3, padding=1, groups=in_ch),
+            GlobalAttention(in_ch),
             nn.BatchNorm2d(in_ch),
             nn.Conv2d(in_ch, mid_ch, kernel_size=1),
-            BiasedSqueezeAndExcitation(mid_ch, max(mid_ch // 4, 4)),
+            GlobalAttention(mid_ch),
             nn.ReLU6(),
             nn.Conv2d(mid_ch, in_ch, kernel_size=1),
         )
@@ -237,23 +238,37 @@ class MVNetModel(nn.Module):
         super().__init__()
 
         self.stem = nn.Sequential(
-            nn.Conv2d(3, 4, kernel_size=1),
-            nn.BatchNorm2d(4),
+            nn.Conv2d(3, 3, kernel_size=1),
+            nn.BatchNorm2d(3),
         )
 
         self.backbone = nn.Sequential(
             # 80x60 input
 
-            DownsampleConv(4, 4),              # 40x30
-            SpatialPyramidPool(4),
+            DownsampleConv(3, 3),              # 40x30
+            SpatialPyramidPool(3),
 
-            DownsampleConv(4, 8),              # 20x15
-            SpatialPyramidPool(8),
-            ResidualConv(8),
+            DownsampleConv(3, 6),              # 20x15
+            SpatialPyramidPool(6),
 
-            nn.BatchNorm2d(8),
-            #AttentionBlock(8, num_heads=2, use_new_attention_order=True),
-            nn.Conv2d(8, 1, kernel_size=1),
+            DenseBlock(
+                DownsampleConv(6, 12),         # 10x8
+                ResidualConv(12),
+
+                DenseBlock(
+                    DownsampleConv(12, 24),    # 5x4
+                    ResidualConv(24),
+                    UpsampleConv(24, 12, scale_factor=2)    # 10x8
+                ),
+
+                nn.Conv2d(24, 12, kernel_size=1),
+                ResidualConv(12),
+                UpsampleConv(12, 6, size=(15, 20))          # 20x15
+            ),
+
+            nn.Conv2d(12, 6, kernel_size=1),
+            ResidualConv(6),
+            nn.Conv2d(6, 1, kernel_size=1)
         )
 
         self.head = nn.Identity()
