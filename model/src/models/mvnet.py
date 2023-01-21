@@ -61,7 +61,7 @@ class DetectionHead(nn.Module):
 
         self.conv1 = DilatedGaussianFilter(3, 1)
         self.conv2 = DilatedGaussianFilter(3, 2)
-        self.conv3 = DilatedGaussianFilter(3, 4)
+        self.conv3 = DilatedGaussianFilter(3, 3)
 
     def forward(self, x):
         x = self.act(x)
