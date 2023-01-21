@@ -199,12 +199,16 @@ for epoch in range(args.epochs):
 
         if last_logged_image < time.time() - 1:
             last_logged_image = time.time()
+
             input_image = (inputs[0].detach().cpu() + 1.) / 2.
             output_target = upsample_like(targets[[0]], input_image[0], mode='nearest').detach().cpu()
             output_unknown_mask = upsample_like(unknown_mask[[0]], input_image[0], mode='nearest').detach().cpu()
+
             output_loss = upsample_like(normalize_loss(alpha_loss[[0]]), input_image[0], mode='nearest').detach().cpu()
-            output_masked_loss = upsample_like(normalize_loss(alpha_loss[[0]] * (1. - unknown_mask[[0]])), input_image[0], mode='nearest').detach().cpu()
             output_mask = upsample_like(torch.sigmoid(outputs[[0]]), input_image[0], mode='nearest').detach().cpu()
+            output_masked_loss = upsample_like(normalize_loss(alpha_loss[[0]] * (1. - unknown_mask[[0]])), input_image[0], mode='nearest').detach().cpu()
+
+            detected_target = upsample_like(model.detect(outputs[[0]]), input_image[0], mode='nearest').detach().cpu()
 
             cells = [
                 input_image,
@@ -214,6 +218,10 @@ for epoch in range(args.epochs):
                 output_loss[0].repeat(3, 1, 1),
                 output_mask[0].repeat(3, 1, 1),
                 output_masked_loss[0].repeat(3, 1, 1),
+
+                detected_target[0].repeat(3, 1, 1),
+                detected_target[0].repeat(3, 1, 1),
+                detected_target[0].repeat(3, 1, 1),
             ]
 
             writer.add_image(f'{model_name}/sample', torchvision.utils.make_grid(cells, nrow=3), step)

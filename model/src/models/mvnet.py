@@ -3,7 +3,7 @@ import torch
 from scipy import signal
 from torch import nn
 import torch.nn.functional as F
-from einops import einsum, rearrange
+from einops import einsum
 
 from src.models.gdunet_attention import AttentionBlock
 
@@ -61,12 +61,11 @@ class DetectionHead(nn.Module):
 
         self.conv1 = DilatedGaussianFilter(3, 1)
         self.conv2 = DilatedGaussianFilter(3, 2)
-        self.conv3 = DilatedGaussianFilter(5, 2)
-        self.conv4 = DilatedGaussianFilter(5, 3)
+        self.conv3 = DilatedGaussianFilter(3, 4)
 
     def forward(self, x):
         x = self.act(x)
-        x = self.conv1(x) + self.conv2(x) + self.conv3(x) + self.conv4(x)
+        x = self.conv1(x) + self.conv2(x) + self.conv3(x)
         return x
 
 
@@ -76,11 +75,10 @@ class Downsample(nn.UpsamplingBilinear2d):
 
 
 class DownsampleConv(nn.Sequential):
-    def __init__(self, in_ch, out_ch):
-        mid_ch = min(in_ch, out_ch) * 2
+    def __init__(self, in_ch, out_ch, kernel_size=3, mix_ch=False):
         super().__init__(
-            nn.Conv2d(in_ch, mid_ch, kernel_size=3, padding=1, groups=in_ch, stride=2),
-            nn.Conv2d(mid_ch, out_ch, kernel_size=1),
+            nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, padding=((kernel_size - 1) // 2), groups=in_ch, stride=2),
+            nn.Conv2d(out_ch, out_ch, kernel_size=1) if mix_ch else nn.Identity(),
             nn.BatchNorm2d(out_ch),
         )
 
@@ -107,15 +105,17 @@ class LeakySigmoid(nn.Module):
 
 
 class BiasedSqueezeAndExcitation(torch.nn.Module):
-    def __init__(self, in_ch, mid_ch) -> None:
+    def __init__(self, in_ch, mul_ch=2):
         super().__init__()
+        mid_ch = int(in_ch * mul_ch)
+
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.maxpool = nn.AdaptiveMaxPool2d(1)
         self.conv_map = nn.Conv2d(in_ch * 2, mid_ch, kernel_size=1)
         self.conv_mul = nn.Conv2d(mid_ch, in_ch, kernel_size=1)
         self.conv_bias = nn.Conv2d(mid_ch, in_ch, kernel_size=1)
         self.mid_act = nn.ReLU6()
-        self.out_act = LeakySigmoid()
+        self.out_act = nn.Sigmoid()
 
     def forward(self, x):
         y1 = self.avgpool(x)
@@ -150,7 +150,7 @@ class GlobalAttention(nn.Module):
             nn.Conv2d(in_ch * self.attention_heads, mid_ch, 1),
             nn.ReLU6(),
             nn.Conv2d(mid_ch, in_ch, 1),
-            LeakySigmoid()
+            nn.Sigmoid()
         )
 
         self.bias_term = nn.Sequential(
@@ -182,16 +182,16 @@ class GlobalAttention(nn.Module):
         return x * self.mul_term(attention) + self.bias_term(attention)
 
 
-class ResidualConv(nn.Sequential):
-    def __init__(self, in_ch):
-        mid_ch = in_ch * 2
+class ConvNeXt(nn.Sequential):
+    def __init__(self, in_ch, mul_ch=4):
+        mid_ch = int(in_ch * mul_ch)
 
         super().__init__(
             nn.Conv2d(in_ch, in_ch, kernel_size=3, padding=1, groups=in_ch),
-            GlobalAttention(in_ch),
+            BiasedSqueezeAndExcitation(in_ch),
             nn.BatchNorm2d(in_ch),
             nn.Conv2d(in_ch, mid_ch, kernel_size=1),
-            GlobalAttention(mid_ch),
+            BiasedSqueezeAndExcitation(mid_ch),
             nn.ReLU6(),
             nn.Conv2d(mid_ch, in_ch, kernel_size=1),
         )
@@ -201,21 +201,21 @@ class ResidualConv(nn.Sequential):
 
 
 class SpatialPyramidPool(nn.Module):
-    def __init__(self, in_ch):
+    def __init__(self, in_ch, channel_add=True):
         super().__init__()
-
-        mid_ch = in_ch * 2
+        self.channel_add = channel_add
+        self.in_ch = in_ch
 
         self.convin = nn.Conv2d(in_ch, in_ch, kernel_size=3, padding=1, groups=in_ch)
         self.pool1 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
         self.pool2 = nn.MaxPool2d(kernel_size=5, stride=1, padding=2)
         self.pool3 = nn.MaxPool2d(kernel_size=7, stride=1, padding=3)
-        self.att1 = BiasedSqueezeAndExcitation(in_ch * 4, max(in_ch, 4))
+        self.att1 = BiasedSqueezeAndExcitation(in_ch * 4)
         self.norm = nn.BatchNorm2d(in_ch * 4)
-        self.convmid = nn.Conv2d(in_ch * 4, mid_ch, kernel_size=1)
-        self.att2 = BiasedSqueezeAndExcitation(mid_ch, max(mid_ch // 4, 4))
+        self.convmid = nn.Conv2d(in_ch * 4, in_ch, kernel_size=1)
+        self.att2 = BiasedSqueezeAndExcitation(in_ch)
         self.act = nn.ReLU6()
-        self.convout = nn.Conv2d(mid_ch, in_ch, kernel_size=1)
+        self.convout = nn.Conv2d(in_ch, in_ch, kernel_size=1)
 
     def forward(self, x):
         y1 = self.convin(x)
@@ -226,7 +226,15 @@ class SpatialPyramidPool(nn.Module):
         y = torch.cat([y1, y2, y3, y4], 1)
         y = self.att1(y)
         y = self.norm(y)
-        y = self.convmid(y)
+
+        if self.channel_add:
+            y = y[:, 0:self.in_ch] + \
+                y[:, self.in_ch:(self.in_ch * 2)] + \
+                y[:, (self.in_ch * 2):(self.in_ch * 3)] + \
+                y[:, (self.in_ch * 3):(self.in_ch * 4)]
+        else:
+            y = self.convmid(y)
+
         y = self.att2(y)
         y = self.act(y)
         y = self.convout(y)
@@ -245,33 +253,30 @@ class MVNetModel(nn.Module):
         self.backbone = nn.Sequential(
             # 80x60 input
 
-            DownsampleConv(3, 3),              # 40x30
+            DownsampleConv(3, 3, mix_ch=True),  # 40x30
             SpatialPyramidPool(3),
 
-            DownsampleConv(3, 6),              # 20x15
-            SpatialPyramidPool(6),
+            DownsampleConv(3, 3, mix_ch=True),  # 20x15
+            SpatialPyramidPool(3),
 
             DenseBlock(
-                DownsampleConv(6, 12),         # 10x8
-                ResidualConv(12),
+                DownsampleConv(3, 9),          # 10x8
+                ConvNeXt(9, mul_ch=2),
 
-                DenseBlock(
-                    DownsampleConv(12, 24),    # 5x4
-                    ResidualConv(24),
-                    UpsampleConv(24, 12, scale_factor=2)    # 10x8
+                ResidualBlock(
+                    DownsampleConv(9, 18),     # 5x4
+                    ConvNeXt(18, mul_ch=2),
+                    UpsampleConv(18, 9, scale_factor=2)    # 10x8
                 ),
 
-                nn.Conv2d(24, 12, kernel_size=1),
-                ResidualConv(12),
-                UpsampleConv(12, 6, size=(15, 20))          # 20x15
+                UpsampleConv(9, 3, size=(15, 20))          # 20x15
             ),
 
-            nn.Conv2d(12, 6, kernel_size=1),
-            ResidualConv(6),
             nn.Conv2d(6, 1, kernel_size=1)
         )
 
         self.head = nn.Identity()
+        self.detector = DetectionHead()
 
         #self.mean2x = torch.nn.Parameter(2. * torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1), requires_grad=False)
         #self.std = torch.nn.Parameter(torch.tensor([0.229, 0.224, 0.225]).reshape(-1, 1, 1), requires_grad=False)
@@ -287,6 +292,10 @@ class MVNetModel(nn.Module):
         x = self.backbone(x)
         x = self.head(x)
         return x
+
+    def detect(self, x):
+        x = self.detector(x)
+        return x / torch.amax(x, dim=(1, 2, 3))
 
     def deploy(self):
         # Add the final detection head directly into the model
