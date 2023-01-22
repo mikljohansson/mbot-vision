@@ -1,4 +1,5 @@
 #include <esp_nn.h>
+#include "tensorflow/lite/micro/micro_error_reporter.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
 #include "tensorflow/lite/micro/system_setup.h"
@@ -11,6 +12,7 @@
 #include "image/jpeg.h"
 #include "common.h"
 
+static tflite::ErrorReporter* error_reporter = nullptr;
 static const tflite::Model* model = nullptr;
 static tflite::MicroInterpreter* interpreter = nullptr;
 
@@ -63,11 +65,17 @@ void ObjectDetector::begin() {
     try {
         tflite::InitializeTarget();
 
+        // Set up logging. Google style is to avoid globals or statics because of
+        // lifetime uncertainty, but since this has a trivial destructor it's okay.
+        // NOLINTNEXTLINE(runtime-global-variables)
+        static tflite::MicroErrorReporter micro_error_reporter;
+        error_reporter = &micro_error_reporter;
+
         // Map the model into a usable data structure. This doesn't involve any
         // copying or parsing, it's a very lightweight operation.
         model = tflite::GetModel(mbot_vision_model);
         if (model->version() != TFLITE_SCHEMA_VERSION) {
-            MicroPrintf(
+            TF_LITE_REPORT_ERROR(error_reporter,
                                 "Model provided is schema version %d not equal "
                                 "to supported version %d.",
                                 model->version(), TFLITE_SCHEMA_VERSION);
@@ -115,12 +123,12 @@ void ObjectDetector::begin() {
         // Build an interpreter to run the model with.
         // NOLINTNEXTLINE(runtime-global-variables)
         interpreter = new tflite::MicroInterpreter(
-            model, micro_op_resolver, tensor_arena, kTensorArenaSize);
+            model, micro_op_resolver, tensor_arena, kTensorArenaSize, error_reporter);
 
         // Allocate memory from the tensor_arena for the model's tensors.
         TfLiteStatus allocate_status = interpreter->AllocateTensors();
         if (allocate_status != kTfLiteOk) {
-            MicroPrintf( "AllocateTensors() failed");
+            TF_LITE_REPORT_ERROR(error_reporter, "AllocateTensors() failed");
             return;
         }
 
@@ -133,7 +141,7 @@ void ObjectDetector::begin() {
             (_input->dims->data[2] != MBOT_VISION_MODEL_INPUT_WIDTH) ||
             (_input->dims->data[3] != 3) || 
             (_input->type != kTfLiteInt8)) {
-            MicroPrintf(
+            TF_LITE_REPORT_ERROR(error_reporter,
                                 "The models input tensor shape and type doesn't match what's expected by objectdetector.cc");
             return;
         }
@@ -191,7 +199,7 @@ void ObjectDetector::run() {
             try {
                 // Run the model on this input and make sure it succeeds.
                 if (kTfLiteOk != interpreter->Invoke()) {
-                    MicroPrintf( "Invoke failed.");
+                    TF_LITE_REPORT_ERROR(error_reporter, "Invoke failed.");
                 }
                 
                 output = interpreter->output(0);

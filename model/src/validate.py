@@ -46,9 +46,7 @@ for inputs, _, _ in dataloader:
     with torch.inference_mode():
         results = model(inputs)
     mask = results[0]
-    mask = mask + min(mask.amin(), 0.)
-    mask = mask / float(mask.amax() + 0.001)
-    mask = torchvision.transforms.functional.to_pil_image(mask.clamp(0., 1.))
+    mask = torchvision.transforms.functional.to_pil_image(mask)
     mask = mask.resize(image.size, resample=Image.Resampling.NEAREST)
     mask.save(os.path.join(os.path.dirname(args.torch_model), 'validation/%03d-torch.png' % image_count))
 
@@ -59,8 +57,6 @@ for inputs, _, _ in dataloader:
     results_tf = interpreter.get_tensor(tflite_outputs[0]['index'])
 
     mask_tf = (results_tf[0].astype(np.float32) + 127.) / 255.
-    mask_tf = mask_tf + min(np.amin(mask_tf), 0)
-    mask_tf = mask_tf / np.amax(mask_tf)
     mask_tf = (mask_tf.clip(0., 1.) * 255.).astype(np.uint8)
     mask_tf = torchvision.transforms.functional.to_pil_image(mask_tf)
     #mask_tf = torchvision.transforms.functional.to_pil_image((mask_tf * 255).astype(np.uint8))

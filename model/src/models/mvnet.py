@@ -34,7 +34,7 @@ class UpsampleInterpolate2d(nn.Module):
 
 # https://stackoverflow.com/questions/60534909/gaussian-filter-in-pytorch
 # Define 2D Gaussian kernel
-def gkern(kernlen=256, std=128):
+def gkern(kernlen=3, std=2.):
     """Returns a 2D Gaussian kernel array."""
     gkern1d = signal.gaussian(kernlen, std=std).reshape(kernlen, 1)
     gkern2d = np.outer(gkern1d, gkern1d)
@@ -46,11 +46,10 @@ class DilatedGaussianFilter(nn.Module):
         super().__init__()
         self.conv = nn.Conv2d(1, 1, kernel_size=kernel_size, dilation=dilation,
                               padding=(kernel_size * dilation - dilation) // 2)
-        self.conv.weight.data[:] = gkern(kernel_size, 2).unsqueeze(0).unsqueeze(0).to(dtype=torch.float32)
-        self.divisor = kernel_size ** 2
+        self.conv.weight.data[:] = gkern(kernel_size, 2.).unsqueeze(0).unsqueeze(0).to(dtype=torch.float32)
 
     def forward(self, x):
-        return self.conv(x) / self.divisor
+        return self.conv(x)
 
 
 class DetectionHead(nn.Module):
@@ -63,10 +62,22 @@ class DetectionHead(nn.Module):
         self.conv2 = DilatedGaussianFilter(3, 2)
         self.conv3 = DilatedGaussianFilter(3, 3)
 
+        self.maxpool = nn.AdaptiveMaxPool2d(1)
+
     def forward(self, x):
+        # Max probability at any location
         x = self.act(x)
+        mp = self.maxpool(x)
+
+        # Detect the center-of-mass of objects using gaussian kernels
         x = self.conv1(x) + self.conv2(x) + self.conv3(x)
-        return x
+        cp = self.maxpool(x)
+
+        # Rescale the detection map to the same scale as the max detection probability
+        x = x / (cp + 0.0001) * mp
+
+        # Avoid small overflows outside the range of [0, 1]
+        return x.clamp(0., 1.)
 
 
 class Downsample(nn.UpsamplingBilinear2d):
@@ -294,9 +305,7 @@ class MVNetModel(nn.Module):
         return x
 
     def detect(self, x):
-        x = self.detector(x)
-        x = x + min(float(torch.amin(x, dim=(1, 2, 3))), 0.)
-        return (x / float(torch.amax(x, dim=(1, 2, 3)))).clamp(0., 1.)
+        return self.detector(x)
 
     def deploy(self):
         # Add the final detection head directly into the model

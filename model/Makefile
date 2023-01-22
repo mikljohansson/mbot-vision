@@ -13,8 +13,9 @@ EXPERIMENT ?= $(LOGGING_PATH)
 ACCELERATE_ARGS := --mixed_precision fp16
 
 INFERENCE_ENGINE ?= TFMICRO
+#INFERENCE_ENGINE ?= TFMICRO_LEGACY
 #INFERENCE_ENGINE ?= TINYMAIX
-INFERENCE_EXTENSION = $(shell echo $(INFERENCE_ENGINE) | sed s/TINYMAIX/tmdl/ | sed s/TFMICRO/tflite/)
+INFERENCE_EXTENSION = $(shell echo $(INFERENCE_ENGINE) | sed "s/TINYMAIX/tmdl/" | sed "s/TFMICRO.*/tflite/")
 
 #MODEL ?= mobilenet_v3_small
 #MODEL ?= mobilenet_v3_micro

@@ -147,7 +147,7 @@ void ObjectDetector::run() {
 
             // Process the inference results
             int maxx = 0, maxy = 0;
-            int maxv = -1.0;
+            int maxv = -256;
 
             for (int y = 0; y < MBOT_VISION_MODEL_OUTPUT_HEIGHT; y++) {
                 for (int x = 0; x < MBOT_VISION_MODEL_OUTPUT_WIDTH; x++) {
@@ -161,15 +161,13 @@ void ObjectDetector::run() {
                 }
             }
 
-            if (!_lastoutputbuf) {
-                _lastoutputbuf = new uint8_t[MBOT_VISION_MODEL_OUTPUT_WIDTH * MBOT_VISION_MODEL_OUTPUT_HEIGHT];
+            if (_lastoutputbuf) {
+                memcpy(_lastoutputbuf, _output, MBOT_VISION_MODEL_OUTPUT_WIDTH * MBOT_VISION_MODEL_OUTPUT_HEIGHT);
             }
-            memcpy(_lastoutputbuf, _output, MBOT_VISION_MODEL_OUTPUT_WIDTH * MBOT_VISION_MODEL_OUTPUT_HEIGHT);
 
-            float probability = (float)maxv / 255;
+            float probability = ((float)maxv + 127) / 255;
             if (probability >= 0.1) {
                 _detected = {(float)maxx / MBOT_VISION_MODEL_OUTPUT_WIDTH, (float)maxy / MBOT_VISION_MODEL_OUTPUT_HEIGHT, true};
-                xSemaphoreGive(_signal);
                 serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f (decompress %dms, inference %dms, total %dms)\n", 
                     _detected.x, _detected.y, probability, decompress.took(), inference.took(), frame.took());
             }
@@ -177,6 +175,7 @@ void ObjectDetector::run() {
                 _detected = {0, 0, false};
             }
 
+            xSemaphoreGive(_signal);
             _framerate.tick();
         }
     }
@@ -186,16 +185,16 @@ static int8_t *buffer = 0;
 
 void ObjectDetector::draw(uint8_t *pixels, size_t width, size_t height) {
     if (!_lastoutputbuf) {
-        return;
+        _lastoutputbuf = new int8_t[MBOT_VISION_MODEL_OUTPUT_HEIGHT * MBOT_VISION_MODEL_OUTPUT_WIDTH];
+        memset(_lastoutputbuf, 0, MBOT_VISION_MODEL_OUTPUT_HEIGHT * MBOT_VISION_MODEL_OUTPUT_WIDTH);
     }
 
-    size_t offset = width / 2 - MBOT_VISION_MODEL_OUTPUT_WIDTH / 2 + (height / 2 - MBOT_VISION_MODEL_OUTPUT_HEIGHT / 2) * width;
-
+    size_t offset = (height - MBOT_VISION_MODEL_OUTPUT_HEIGHT) * width;
     for (int y = 0; y < MBOT_VISION_MODEL_OUTPUT_HEIGHT; y++) {
         for (int x = 0; x < MBOT_VISION_MODEL_OUTPUT_WIDTH; x++) {
             int val = _lastoutputbuf[y * MBOT_VISION_MODEL_OUTPUT_WIDTH + x];
             size_t pos = (offset + y * width + x) * 3;
-            pixels[pos] = pixels[pos + 1] = pixels[pos + 2] = (val + 127);
+            pixels[pos] = pixels[pos + 1] = pixels[pos + 2] = std::min(std::max(0, val + 127), 255);
         }
     }
 }
