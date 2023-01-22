@@ -58,6 +58,10 @@ void ObjectDetector::begin() {
     Serial.println("Initializing tflite");
     tensor_arena = new uint8_t[kTensorArenaSize];
 
+    if (!tensor_arena) {
+        serialPrint("Failed to allocate %d bytez for tfmicro tensor arena\n", kTensorArenaSize);
+    }
+
     try {
         tflite::InitializeTarget();
 
@@ -88,7 +92,7 @@ void ObjectDetector::begin() {
         // NOLINTNEXTLINE(runtime-global-variables)
 
         // NOTE: Don't forget to change the max number of ops in the template
-        static tflite::MicroMutableOpResolver<23> micro_op_resolver;
+        static tflite::MicroMutableOpResolver<24> micro_op_resolver;
         micro_op_resolver.AddAdd();
         //micro_op_resolver.AddBatchMatMul();
         micro_op_resolver.AddConcatenation();
@@ -110,6 +114,7 @@ void ObjectDetector::begin() {
         micro_op_resolver.AddSoftmax();
         micro_op_resolver.AddSplit();
         micro_op_resolver.AddSquaredDifference();
+        micro_op_resolver.AddStridedSlice();
         micro_op_resolver.AddSub();
         micro_op_resolver.AddTranspose();
         micro_op_resolver.AddTransposeConv();
@@ -224,15 +229,13 @@ void ObjectDetector::run() {
                 }
             }
 
-            if (!_lastoutputbuf) {
-                _lastoutputbuf = new int8_t[MBOT_VISION_MODEL_OUTPUT_HEIGHT * MBOT_VISION_MODEL_OUTPUT_WIDTH];
+            if (_lastoutputbuf) {
+                memcpy(_lastoutputbuf, output->data.int8, MBOT_VISION_MODEL_OUTPUT_HEIGHT * MBOT_VISION_MODEL_OUTPUT_WIDTH);
             }
-            memcpy(_lastoutputbuf, output->data.int8, MBOT_VISION_MODEL_OUTPUT_HEIGHT * MBOT_VISION_MODEL_OUTPUT_WIDTH);
 
-            float probability = (float)maxv / 255;
+            float probability = ((float)maxv + 127) / 255;
             if (probability >= 0.1) {
                 _detected = {(float)maxx / MBOT_VISION_MODEL_OUTPUT_WIDTH, (float)maxy / MBOT_VISION_MODEL_OUTPUT_HEIGHT, true};
-                xSemaphoreGive(_signal);
                 serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f (decompress %dms, inference %dms, total %dms)\n", 
                     _detected.x, _detected.y, probability, decompress.took(), inference.took(), frame.took());
             }
@@ -240,6 +243,7 @@ void ObjectDetector::run() {
                 _detected = {0, 0, false};
             }
 
+            xSemaphoreGive(_signal);
             _framerate.tick();
         }
     }
@@ -249,29 +253,16 @@ static int8_t *buffer = 0;
 
 void ObjectDetector::draw(uint8_t *pixels, size_t width, size_t height) {
     if (!_lastoutputbuf) {
-        return;
+        _lastoutputbuf = new int8_t[MBOT_VISION_MODEL_OUTPUT_HEIGHT * MBOT_VISION_MODEL_OUTPUT_WIDTH];
+        memset(_lastoutputbuf, 0, MBOT_VISION_MODEL_OUTPUT_HEIGHT * MBOT_VISION_MODEL_OUTPUT_WIDTH);
     }
 
-    TfLiteTensor* output;
-    try {
-        output = interpreter->output(0);
-    }
-    catch (std::exception &e) {
-        serialPrint("Caught tflite exception when fetching model output: %s\n", e.what());
-        return;
-    }
-    catch (...) {
-        serialPrint("Caught unknown tflite exception when fetching model output\n");
-        return;
-    }
-
-    size_t offset = width / 2 - MBOT_VISION_MODEL_OUTPUT_WIDTH / 2 + (height / 2 - MBOT_VISION_MODEL_OUTPUT_HEIGHT / 2) * width;
-
+    size_t offset = (height - MBOT_VISION_MODEL_OUTPUT_HEIGHT) * width;
     for (int y = 0; y < MBOT_VISION_MODEL_OUTPUT_HEIGHT; y++) {
         for (int x = 0; x < MBOT_VISION_MODEL_OUTPUT_WIDTH; x++) {
-            int8_t val = _lastoutputbuf[y * MBOT_VISION_MODEL_OUTPUT_WIDTH + x];
+            int val = _lastoutputbuf[y * MBOT_VISION_MODEL_OUTPUT_WIDTH + x];
             size_t pos = (offset + y * width + x) * 3;
-            pixels[pos] = pixels[pos + 1] = pixels[pos + 2] = (val + 127);
+            pixels[pos] = pixels[pos + 1] = pixels[pos + 2] = std::min(std::max(0, val + 127), 255);
         }
     }
 }

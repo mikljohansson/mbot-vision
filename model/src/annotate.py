@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import tqdm
 from PIL import Image, ImageDraw
 
 from src.image import get_input_box
@@ -14,7 +15,7 @@ parser.add_argument('-i', '--input', required=True, help='Directory of images to
 parser.add_argument('-a', '--annotated', required=True, help='Directory to store annotated images')
 parser.add_argument('-t', '--train', required=True, help='Directory to store training images')
 parser.add_argument('-c', '--classes', required=True, help='Comma separated list of classes of interest')
-parser.add_argument('--batch-size', type=int, help='Batch size', default=64)
+parser.add_argument('--batch-size', type=int, help='Batch size', default=8)
 parser.add_argument('--input-width', type=int, help='Input width', default=160)
 parser.add_argument('--input-height', type=int, help='Input height', default=120)
 args = parser.parse_args()
@@ -23,12 +24,13 @@ labels_of_interest = set(args.classes.split(','))
 files = glob.glob(os.path.join(args.input, '*.jpg'))
 
 model = torch.hub.load('ultralytics/yolov5', 'yolov5x')
+pbar = tqdm.tqdm(total=len(files))
 
 for i in range(0, len(files), args.batch_size):
     batch = files[i:(i + args.batch_size)]
     results = model(batch)
 
-    for filename, image, predictions in zip(results.files, results.imgs, results.pred):
+    for filename, image, predictions in zip(results.files, results.ims, results.pred):
         image = Image.fromarray(image, 'RGB') if isinstance(image, np.ndarray) else image
         mask = Image.new('L', image.size)
         draw = ImageDraw.Draw(mask)
@@ -53,4 +55,5 @@ for i in range(0, len(files), args.batch_size):
         targetname = os.path.join(args.train, os.path.splitext(os.path.basename(filename))[0] + '.png')
         image.save(targetname)
 
-    results.display(save=True, save_dir=Path(args.annotated))
+    #results.display(save=True, save_dir=Path(args.annotated))
+    pbar.update(len(batch))

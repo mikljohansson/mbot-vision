@@ -24,13 +24,16 @@ class JpegStream {
         void start() {
             Serial.print("Stream connected: ");
             Serial.println(_client.remoteIP());
-            xTaskCreatePinnedToCore(runStatic, "jpegStream", 10000, this, 2, &_task, 1);
+            xTaskCreatePinnedToCore(runStatic, "jpegStream", 10000, this, 2, &_task, 0);
         }
 
     private:
         void send(const void *data, size_t len) {
-            for (size_t written = 0; data && _client.connected() && written < len; yield()) {
+            for (size_t written = 0; data && _client.connected() && written < len; ) {
                 written += _client.write(((const uint8_t *)data) + written, len - written);
+
+                // Prevents watchdog from triggering
+                delay(1);
             }
         }
 
@@ -49,7 +52,14 @@ class JpegStream {
                 camera_fb_t *fb = fbqueue->take();
 
                 if (fb) {
-                    String headers = "\r\n--gc0p4Jq0M2Yt08jU534c0p\r\nContent-Type: image/jpeg\r\n";
+                    String headers = "\r\n--gc0p4Jq0M2Yt08jU534c0p\r\n";
+
+                    if (!_showDetector) {
+                        headers += "Content-Type: image/jpeg\r\n";
+                    }
+                    else {
+                        headers += "Content-Type: image/bmp\r\n";
+                    }
 
                     if (fb->format == PIXFORMAT_JPEG && !_showDetector) {
                         headers += "Content-Length: ";
@@ -70,13 +80,33 @@ class JpegStream {
                                 _detector.draw(decoder->getOutputFrame(), decoder->getOutputWidth(), decoder->getOutputHeight());
                                 
                                 // Encode to JPEG and send
+                                /*
                                 if (!fmt2jpg_cb(
                                         decoder->getOutputFrame(), 
                                         decoder->getOutputWidth() * decoder->getOutputHeight() * JD_BPP, 
                                         decoder->getOutputWidth(), decoder->getOutputHeight(), 
-                                        PIXFORMAT_RGB888, 60, sendStatic, this)) {
+                                        PIXFORMAT_RGB888, 80, sendStatic, this)) {
                                     Serial.println("Failed to convert framebuffer to jpeg");
                                 }
+                                */
+
+                                // Encode to lossless BMP and send
+                                uint8_t *out_bmp = 0;
+                                size_t out_bmp_len;
+
+
+                                if (fmt2bmp(
+                                    decoder->getOutputFrame(), 
+                                    decoder->getOutputWidth() * decoder->getOutputHeight() * JD_BPP,
+                                    decoder->getOutputWidth(), decoder->getOutputHeight(), 
+                                    PIXFORMAT_RGB888, &out_bmp, &out_bmp_len)) {
+                                    send(out_bmp, out_bmp_len);
+                                }
+                                else {
+                                    Serial.println("Failed to convert framebuffer to jpeg");
+                                }
+                                
+                                free(out_bmp);
                             }
                         }
                         else {

@@ -83,11 +83,14 @@ shutil.copyfile(tf_model_path + '/model_full_integer_quant.tflite', tflite_model
 # Load the model file and show details
 interpreter = tf.lite.Interpreter(model_path=tflite_model_path)
 
-print("\nConverted tflite model details:")
+print("\nTflite model details:")
 for i, d in enumerate(interpreter.get_input_details()):
-    print(f"Input {i} shape: {d['shape']} type: {d['dtype'].__name__}")
+    print(f"Input {i} name: {d['name']}, shape: {d['shape']}, type: {d['dtype'].__name__}")
 for i, d in enumerate(interpreter.get_output_details()):
-    print(f"Output {i} shape: {d['shape']} type: {d['dtype'].__name__}")
+    print(f"Output {i} name: {d['name']}, shape: {d['shape']}, type: {d['dtype'].__name__}")
+
+signatures = interpreter.get_signature_list()
+print("Signatures:", signatures)
 
 # Print a summary of the tflite model
 tf.lite.experimental.Analyzer.analyze(model_path=tflite_model_path)

@@ -22,7 +22,7 @@ typedef struct _WifiNetwork {
 } WifiNetwork;
 
 static WifiNetwork wifiNetworks[] = {
-    {"krokodil-ap2", "mistress"},
+    {"krokodil", "mistress"},
     {"dlink-BF60", "ptfmm78341"},
 };
 
@@ -66,12 +66,6 @@ void setup() {
         oled.setTextSize(1);
     }
     oledPrint("Starting up");
-
-    // Start the camera frame capture task
-    camera.begin();
-
-    // Start object detector
-    detector.begin();
 
     // Connect to Mbot
     if (!LOG_TO_SDCARD) {
@@ -134,6 +128,12 @@ void setup() {
         logger.begin();
     }
 
+    // Start the camera frame capture task
+    camera.begin();
+
+    // Start object detector
+    detector.begin();
+
     // Start webserver
     httpdRun(detector);
 
@@ -150,5 +150,5 @@ void setup() {
 }
 
 void loop() {
-    delay(1000);
+    delay(10000);
 }

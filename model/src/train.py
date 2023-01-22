@@ -16,7 +16,7 @@ from torch.utils.data import RandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from src.dataset import ImageDataset
+from src.dataset import ImageDataset, denormalize
 from src.model import create_model
 from src.yolov6.solver.build import build_optimizer, build_lr_scheduler
 
@@ -200,7 +200,7 @@ for epoch in range(args.epochs):
         if last_logged_image < time.time() - 1:
             last_logged_image = time.time()
 
-            input_image = (inputs[0].detach().cpu() + 1.) / 2.
+            input_image = denormalize(inputs[0].detach().cpu())
             output_target = upsample_like(targets[[0]], input_image[0], mode='nearest').detach().cpu()
             output_unknown_mask = upsample_like(unknown_mask[[0]], input_image[0], mode='nearest').detach().cpu()
 

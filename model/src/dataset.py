@@ -12,6 +12,14 @@ from torch.utils.data import Dataset
 from torchvision.transforms import transforms
 
 
+def normalize(image):
+    return image * 2. - 1.
+
+
+def denormalize(image):
+    return (image + 1.) / 2.
+
+
 class ImageDataset(Dataset):
     def __init__(self, images_path, target_size):
         super(ImageDataset, self).__init__()
@@ -58,6 +66,6 @@ class ImageDataset(Dataset):
         unknown_mask = torch.tensor(unknown_mask, dtype=torch.float32) / 255
 
         # Change to range [-1, 1]
-        image = image * 2. - 1.
+        image = normalize(image)
 
         return image, target, unknown_mask

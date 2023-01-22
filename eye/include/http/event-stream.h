@@ -21,13 +21,16 @@ class EventStream {
         void start() {
             Serial.print("Event stream connected: ");
             Serial.println(_client.remoteIP());
-            xTaskCreatePinnedToCore(runStatic, "eventStream", 10000, this, 3, &_task, 1);
+            xTaskCreatePinnedToCore(runStatic, "eventStream", 10000, this, 3, &_task, 0);
         }
 
     private:
         void send(const void *data, size_t len) {
-            for (size_t written = 0; data && _client.connected() && written < len; yield()) {
+            for (size_t written = 0; data && _client.connected() && written < len; ) {
                 written += _client.write(((const uint8_t *)data) + written, len - written);
+                
+                // Prevents watchdog from triggering
+                delay(1);
             }
         }
 

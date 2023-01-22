@@ -114,7 +114,7 @@ class BiasedSqueezeAndExcitation(torch.nn.Module):
         self.conv_map = nn.Conv2d(in_ch * 2, mid_ch, kernel_size=1)
         self.conv_mul = nn.Conv2d(mid_ch, in_ch, kernel_size=1)
         self.conv_bias = nn.Conv2d(mid_ch, in_ch, kernel_size=1)
-        self.mid_act = nn.ReLU6()
+        self.mid_act = nn.ReLU()
         self.out_act = nn.Sigmoid()
 
     def forward(self, x):
@@ -148,14 +148,14 @@ class GlobalAttention(nn.Module):
 
         self.mul_term = nn.Sequential(
             nn.Conv2d(in_ch * self.attention_heads, mid_ch, 1),
-            nn.ReLU6(),
+            nn.ReLU(),
             nn.Conv2d(mid_ch, in_ch, 1),
             nn.Sigmoid()
         )
 
         self.bias_term = nn.Sequential(
             nn.Conv2d(in_ch * self.attention_heads, mid_ch, 1),
-            nn.ReLU6(),
+            nn.ReLU(),
             nn.Conv2d(mid_ch, in_ch, 1),
         )
 
@@ -192,7 +192,7 @@ class ConvNeXt(nn.Sequential):
             nn.BatchNorm2d(in_ch),
             nn.Conv2d(in_ch, mid_ch, kernel_size=1),
             BiasedSqueezeAndExcitation(mid_ch),
-            nn.ReLU6(),
+            nn.ReLU(),
             nn.Conv2d(mid_ch, in_ch, kernel_size=1),
         )
 
@@ -201,7 +201,7 @@ class ConvNeXt(nn.Sequential):
 
 
 class SpatialPyramidPool(nn.Module):
-    def __init__(self, in_ch, channel_add=True):
+    def __init__(self, in_ch, channel_add=False):
         super().__init__()
         self.channel_add = channel_add
         self.in_ch = in_ch
@@ -210,11 +210,11 @@ class SpatialPyramidPool(nn.Module):
         self.pool1 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
         self.pool2 = nn.MaxPool2d(kernel_size=5, stride=1, padding=2)
         self.pool3 = nn.MaxPool2d(kernel_size=7, stride=1, padding=3)
-        self.att1 = BiasedSqueezeAndExcitation(in_ch * 4)
+        self.att1 = nn.Identity()#BiasedSqueezeAndExcitation(in_ch * 4)
         self.norm = nn.BatchNorm2d(in_ch * 4)
         self.convmid = nn.Conv2d(in_ch * 4, in_ch, kernel_size=1)
-        self.att2 = BiasedSqueezeAndExcitation(in_ch)
-        self.act = nn.ReLU6()
+        self.att2 = nn.Identity()#BiasedSqueezeAndExcitation(in_ch)
+        self.act = nn.ReLU()
         self.convout = nn.Conv2d(in_ch, in_ch, kernel_size=1)
 
     def forward(self, x):
@@ -246,33 +246,33 @@ class MVNetModel(nn.Module):
         super().__init__()
 
         self.stem = nn.Sequential(
-            nn.Conv2d(3, 3, kernel_size=1),
-            nn.BatchNorm2d(3),
+            nn.Conv2d(3, 4, kernel_size=1),
+            nn.BatchNorm2d(4),
         )
 
         self.backbone = nn.Sequential(
             # 80x60 input
 
-            DownsampleConv(3, 3, mix_ch=True),  # 40x30
-            SpatialPyramidPool(3),
+            DownsampleConv(4, 4, mix_ch=True),  # 40x30
+            SpatialPyramidPool(4),
 
-            DownsampleConv(3, 3, mix_ch=True),  # 20x15
-            SpatialPyramidPool(3),
+            DownsampleConv(4, 8, mix_ch=True),  # 20x15
+            SpatialPyramidPool(8),
 
-            DenseBlock(
-                DownsampleConv(3, 9),          # 10x8
-                ConvNeXt(9, mul_ch=2),
+            # DenseBlock(
+            #     DownsampleConv(3, 9),          # 10x8
+            #     ConvNeXt(9, mul_ch=2),
+            #
+            #     ResidualBlock(
+            #         DownsampleConv(9, 18),     # 5x4
+            #         ConvNeXt(18, mul_ch=2),
+            #         UpsampleConv(18, 9, scale_factor=2)    # 10x8
+            #     ),
+            #
+            #     UpsampleConv(9, 3, size=(15, 20))          # 20x15
+            # ),
 
-                ResidualBlock(
-                    DownsampleConv(9, 18),     # 5x4
-                    ConvNeXt(18, mul_ch=2),
-                    UpsampleConv(18, 9, scale_factor=2)    # 10x8
-                ),
-
-                UpsampleConv(9, 3, size=(15, 20))          # 20x15
-            ),
-
-            nn.Conv2d(6, 1, kernel_size=1)
+            nn.Conv2d(8, 1, kernel_size=1)
         )
 
         self.head = nn.Identity()
@@ -295,7 +295,8 @@ class MVNetModel(nn.Module):
 
     def detect(self, x):
         x = self.detector(x)
-        return x / torch.amax(x, dim=(1, 2, 3))
+        x = x + min(float(torch.amin(x, dim=(1, 2, 3))), 0.)
+        return (x / float(torch.amax(x, dim=(1, 2, 3)))).clamp(0., 1.)
 
     def deploy(self):
         # Add the final detection head directly into the model

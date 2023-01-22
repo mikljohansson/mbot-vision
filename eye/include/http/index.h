@@ -84,11 +84,12 @@ String indexDocument = R"doc(<html>
         height: 100%;
         max-width: 640px;
         max-height: 480px;
-        padding: 5px;
+        margin: 5px;
         background-image: url('/stream');
         background-repeat: no-repeat;
         background-size: contain;
         background-position: top center;
+        image-rendering: pixelated;
       }
 
       #crosshair {
@@ -96,6 +97,7 @@ String indexDocument = R"doc(<html>
         color: white;
         font-size: 200%;
         transform: translate(-50%, -50%);
+        display: none;
       }
 
       .container td {

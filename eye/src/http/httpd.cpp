@@ -77,6 +77,9 @@ void httpdServiceRequests(void *p) {
     while (true) {
         // Service HTTP requests
         server.handleClient();
+        
+        // Prevents watchdog from triggering
+        delay(1);
     }
 
     vTaskDelete(NULL);
