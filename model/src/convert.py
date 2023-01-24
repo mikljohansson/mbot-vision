@@ -22,7 +22,8 @@ args = parser.parse_args()
 checkpoint = torch.load(args.model, map_location=torch.device('cpu'))
 model, cfg = create_model(checkpoint['model'])
 model.load_state_dict(checkpoint['state'])
-model.deploy()
+if hasattr(model, 'deploy'):
+    model.deploy()
 model.eval()
 
 dataset = ImageDataset(args.dataset, target_size=cfg.model.output_size)

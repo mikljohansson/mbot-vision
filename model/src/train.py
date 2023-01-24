@@ -173,6 +173,10 @@ last_logged_image = 0
 cuda_available = torch.cuda.is_available()
 
 for epoch in range(args.epochs):
+    # Finetune for last few epochs without using the leaky activations
+    if epoch > (args.epochs * 0.9) and hasattr(model, 'deploy'):
+        model.deploy(finetuning=True)
+
     for inputs, targets, unknown_mask in dataloader:
         outputs = model(inputs)
 

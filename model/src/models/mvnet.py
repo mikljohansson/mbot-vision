@@ -490,16 +490,17 @@ class MVNetModel(nn.Module):
     def detect(self, x):
         return self.detector(x)
 
-    def deploy(self):
-        # Add the final detection head directly into the model
-        self.head = DetectionHead()
-
+    def deploy(self, finetuning=False):
         # Deploy sub modules
         for m in self.modules():
             if hasattr(m, 'deploy'):
                 m.deploy()
 
-        # Perform activation inplace
-        for m in self.modules():
-            if type(m) in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
-                m.inplace = True
+        # Add the final detection head directly into the model
+        if not finetuning:
+            self.head = DetectionHead()
+
+            # Perform activation inplace
+            for m in self.modules():
+                if type(m) in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
+                    m.inplace = True
