@@ -20,9 +20,16 @@ static uint8_t *tensor_arena;
 static TfLiteTensor *_input;
 
 static void cropAndQuantizeImage(const uint8_t *pixels, size_t image_width, size_t image_height, int8_t *target) {
+    for (const uint8_t *plast = pixels + image_width * image_height; pixels < plast; pixels++, target++) {
+        *target = ((int)*pixels) + 127;
+    }
+
+    /*
     const size_t left = (image_width - MBOT_VISION_MODEL_INPUT_WIDTH) / 2;
     const size_t right = image_width - left - MBOT_VISION_MODEL_INPUT_WIDTH;
     const size_t top = (image_height - MBOT_VISION_MODEL_INPUT_HEIGHT) / 2;
+
+    //serialPrint("frame %dx%d, left %d right %d top %d\n", image_width, image_height, left, right, top);
 
     const uint8_t* source = pixels + (top * image_width + left) * 3;
     const size_t pixel_count = MBOT_VISION_MODEL_INPUT_WIDTH * MBOT_VISION_MODEL_INPUT_HEIGHT;
@@ -41,6 +48,7 @@ static void cropAndQuantizeImage(const uint8_t *pixels, size_t image_width, size
 
         source += (right + left) * 3;
     }
+    */
 }
 
 ObjectDetector::ObjectDetector()
