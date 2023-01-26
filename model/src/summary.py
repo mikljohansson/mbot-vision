@@ -18,5 +18,5 @@ else:
     if args.deploy:
         model.deploy()
 
-    summary(model, depth=6, input_size=(1, 3, cfg.model.input_size[1], cfg.model.input_size[0]),
+    summary(model, depth=5, input_size=(1, 3, cfg.model.input_size[1], cfg.model.input_size[0]),
             col_names=('input_size', 'output_size', 'num_params', 'kernel_size', 'mult_adds'))

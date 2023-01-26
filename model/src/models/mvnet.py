@@ -46,6 +46,20 @@ class ConcatParallel(nn.ModuleList):
         return torch.cat([module(x) for module in self], dim=1)
 
 
+class AddParallel(nn.ModuleList):
+    """
+    Adds the results from multiple parallel execution branches
+    """
+    def __init__(self, *modules: nn.Module):
+        super().__init__(modules)
+
+    def forward(self, x):
+        y = self[0](x)
+        for module in self[1:]:
+            y = y + module(x)
+        return y
+
+
 class MultiplyParallel(nn.ModuleList):
     """
     Multiplies the results from multiple parallel execution branches
@@ -60,33 +74,40 @@ class MultiplyParallel(nn.ModuleList):
         return y
 
 
-class Upsample(nn.Module):
-    def __init__(self):
-        super(Upsample, self).__init__()
+class Sum(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self.args = args
+        self.kwargs = kwargs
 
     def forward(self, x):
-        return F.interpolate(x, scale_factor=2, mode='nearest')
+        return torch.sum(x, *self.args, **self.kwargs)
 
 
-class Downsample(nn.UpsamplingBilinear2d):
+class UpsampleConv(nn.Sequential):
+    def __init__(self, in_ch, out_ch, kernel_size=3, scale_factor=None, size=None):
+        super().__init__(
+            nn.UpsamplingNearest2d(size=size, scale_factor=scale_factor),
+            nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, padding=1, groups=out_ch),
+            nn.BatchNorm2d(out_ch),
+        )
+
+
+class DownsampleNearest2d(nn.UpsamplingNearest2d):
+    def __init__(self):
+        super().__init__(scale_factor=0.5)
+
+
+class DownsampleBilinear2d(nn.UpsamplingBilinear2d):
     def __init__(self):
         super().__init__(scale_factor=0.5)
 
 
 class DownsampleConv(nn.Sequential):
-    def __init__(self, in_ch, out_ch, kernel_size=3, mix_ch=False):
+    def __init__(self, in_ch, out_ch, kernel_size=3, stride=2):
         super().__init__(
-            nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, padding=((kernel_size - 1) // 2), groups=in_ch, stride=2),
-            nn.Conv2d(out_ch, out_ch, kernel_size=1) if mix_ch else nn.Identity(),
-            nn.BatchNorm2d(out_ch),
-        )
-
-
-class UpsampleConv(nn.Sequential):
-    def __init__(self, in_ch, out_ch, scale_factor=None, size=None):
-        super().__init__(
-            nn.Upsample(scale_factor=scale_factor, size=size),
-            nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, groups=out_ch),
+            nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, padding=((kernel_size - 1) // 2), groups=in_ch, stride=stride),
+            nn.Conv2d(out_ch, out_ch, kernel_size=1),
             nn.BatchNorm2d(out_ch),
         )
 
@@ -113,7 +134,6 @@ class LeakySigmoid(nn.Module):
 class LeakyHardSigmoid(nn.Module):
     """
     Avoids vanishing gradients problem with regular sigmoid function and is more performant
-    https://arxiv.org/abs/1906.03504
     """
     def __init__(self):
         super(LeakyHardSigmoid, self).__init__()
@@ -147,13 +167,23 @@ class LeakyReLU6(nn.Module):
         return y
 
 
+class ConvNormAct(nn.Sequential):
+    def __init__(self, in_ch, out_ch, kernel_size, attention=False, **kwargs):
+        super().__init__(
+            nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, **kwargs),
+            nn.BatchNorm2d(out_ch),
+            BiasedSqueezeAndExcitation(out_ch) if attention else nn.Identity(),
+            LeakyReLU6(),
+        )
+
+
 class BiasedSqueezeAndExcitation(nn.Module):
     """
     Channel attention Squeeze-and-Excitation block modified with inverted bottleneck and bias term
     """
     def __init__(self, in_ch, expansion_ratio=4):
         super().__init__()
-        mid_ch = int(in_ch * expansion_ratio)
+        mid_ch = min(32, max(int(in_ch * expansion_ratio), 4))
 
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.maxpool = nn.AdaptiveMaxPool2d(1)
@@ -161,9 +191,9 @@ class BiasedSqueezeAndExcitation(nn.Module):
         self.mid_act = LeakyReLU6()
         self.conv_bias = nn.Conv2d(mid_ch, in_ch, kernel_size=1)
         self.conv_mul = nn.Conv2d(mid_ch, in_ch, kernel_size=1)
-        self.mul_act = LeakyHardSigmoid()
+        self.act_mul = LeakyHardSigmoid()
 
-    def forward(self, x):
+    def factors(self, x):
         y1 = self.avgpool(x)
         y2 = self.maxpool(x)
 
@@ -172,9 +202,80 @@ class BiasedSqueezeAndExcitation(nn.Module):
         y = self.mid_act(y)
 
         ybias = self.conv_bias(y)
-        ymul = self.mul_act(self.conv_mul(y))
+        ymul = self.act_mul(self.conv_mul(y))
+        return ymul, ybias
 
+    def forward(self, x, y=None):
+        ymul, ybias = self.factors(y if y is not None else x)
         return x * ymul + ybias
+
+
+class ChannelAndSpatialAttention(nn.Module):
+    """
+    Channel and spatial attention module. Mix of CBAM and DFC attention and modified with biases
+    and multiple spatial attention heads.
+    """
+    def __init__(self, in_ch, kernel_size=7, dilation=1, heads=4):
+        super().__init__()
+        self.in_ch = in_ch
+        self.sqe1 = BiasedSqueezeAndExcitation(in_ch)
+        self.sqe2 = BiasedSqueezeAndExcitation(in_ch)
+        self.sqe3 = BiasedSqueezeAndExcitation(in_ch)
+
+        self.conv_mul = nn.Sequential(
+            #nn.Conv2d(2, heads, kernel_size, padding=(kernel_size // 2), bias=False),
+            nn.Conv2d(2, heads, kernel_size=(1, kernel_size), stride=1,
+                      padding=(0, (kernel_size * dilation - dilation) // 2),
+                      dilation=dilation, bias=False),
+            nn.Conv2d(heads, heads, kernel_size=(kernel_size, 1), stride=1,
+                      padding=((kernel_size * dilation - dilation) // 2, 0),
+                      dilation=dilation, groups=heads, bias=False),
+            Sum(dim=1, keepdim=True)
+        )
+
+        self.conv_bias = nn.Sequential(
+            #nn.Conv2d(2, heads, kernel_size, padding=(kernel_size // 2)),
+            nn.Conv2d(2, heads, kernel_size=(1, kernel_size), stride=1,
+                      padding=(0, (kernel_size * dilation - dilation) // 2),
+                      dilation=dilation),
+            nn.Conv2d(heads, heads, kernel_size=(kernel_size, 1), stride=1,
+                      padding=((kernel_size * dilation - dilation) // 2, 0),
+                      dilation=dilation, groups=heads),
+            Sum(dim=1, keepdim=True)
+        )
+
+        self.act_mul = LeakyHardSigmoid()
+
+    def forward(self, x):
+        # Moderate which input channels to pay spatial attention to
+        y = self.sqe1(x)
+
+        # Reduce to mean and max channels, keeping the spatial xy dimension
+        xy = torch.cat([
+            torch.mean(y, dim=1, keepdim=True),
+            torch.max(y, dim=1, keepdim=True)[0]], 1)
+
+        # Downsample to improve performance
+        #xy = F.avg_pool2d(xy, kernel_size=2, stride=2)
+
+        # Calculate multi-head spatial attention maps
+        xybias = self.conv_bias(xy)
+        xymul = self.act_mul(self.conv_mul(xy))
+
+        # Expand spatial attention map to in_ch
+        xybias = xybias.expand(-1, self.in_ch, -1, -1)
+        xymul = xymul.expand(-1, self.in_ch, -1, -1)
+
+        # Moderate which channels get the spatial attention applied
+        xybias = self.sqe2(xybias, x)
+        xymul = self.sqe3(xymul, x)
+
+        # Upsample again
+        #xybias = F.interpolate(xybias, size=x.shape[-2:], mode='nearest')
+        #xymul = F.interpolate(xymul, size=x.shape[-2:], mode='nearest')
+
+        # Apply the spatial and channel attention
+        return x * xymul + xybias
 
 
 class GlobalAttention(nn.Module):
@@ -230,7 +331,7 @@ class GlobalAttention(nn.Module):
 
 class GhostAttention(nn.Sequential):
     """
-    Gated spatial attention module using only convolutions
+    Gated spatial attention module (DFC attention) using only convolutions
     https://github.com/huawei-noah/Efficient-AI-Backbones/tree/master/ghostnetv2_pytorch
     """
     def __init__(self, in_ch, out_ch, kernel_size=5, dilation=1, **kwargs):
@@ -253,10 +354,10 @@ class GhostAttention(nn.Sequential):
 
 class ParallelGhostAttention(nn.Sequential):
     """
-    Gated spatial attention module with optional channel attention
+    Gated spatial attention module (DFC attention) with channel attention
     https://github.com/huawei-noah/Efficient-AI-Backbones/tree/master/ghostnetv2_pytorch
     """
-    def __init__(self, in_ch, out_ch, kernel_size=5, dilation=1, attention=True):
+    def __init__(self, in_ch, out_ch, kernel_size=5, dilation=1):
         mid_ch = max(in_ch // 2, out_ch // 2)
         super().__init__(
             nn.AvgPool2d(kernel_size=2, stride=2),
@@ -272,7 +373,7 @@ class ParallelGhostAttention(nn.Sequential):
                               dilation=dilation, groups=out_ch, bias=False),
                 ),
             ),
-            BiasedSqueezeAndExcitation(mid_ch * 3) if attention else nn.Identity(),
+            BiasedSqueezeAndExcitation(mid_ch * 3),
             nn.ChannelShuffle(3),
             nn.Conv2d(mid_ch * 3, out_ch, 1, groups=mid_ch),
             LeakyHardSigmoid(),
@@ -280,30 +381,20 @@ class ParallelGhostAttention(nn.Sequential):
         )
 
 
-class ConvNormAct(nn.Sequential):
-    def __init__(self, in_ch, out_ch, kernel_size, attention=False, **kwargs):
-        super().__init__(
-            nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, **kwargs),
-            nn.BatchNorm2d(out_ch),
-            BiasedSqueezeAndExcitation(out_ch) if attention else nn.Identity(),
-            LeakyReLU6(),
-        )
-
-
 class ConvNeXt(nn.Sequential):
     """
     ConvNeXt module with optional channel attention
     """
-    def __init__(self, in_ch, kernel_size=3, expansion_ratio=4, attention=True):
+    def __init__(self, in_ch, kernel_size=3, groups=1, expansion_ratio=4, attention=True):
         mid_ch = int(in_ch * expansion_ratio)
 
         super().__init__(
             nn.Conv2d(in_ch, in_ch, kernel_size=kernel_size, padding=1, groups=in_ch),
             nn.BatchNorm2d(in_ch),
-            nn.Conv2d(in_ch, mid_ch, kernel_size=1),
-            BiasedSqueezeAndExcitation(mid_ch) if attention else nn.Identity(),
+            nn.Conv2d(in_ch, mid_ch, kernel_size=1, groups=groups),
+            ChannelAndSpatialAttention(mid_ch) if attention else nn.Identity(),
             LeakyReLU6(),
-            nn.Conv2d(mid_ch, in_ch, kernel_size=1),
+            nn.Conv2d(mid_ch, in_ch, kernel_size=1, groups=groups),
         )
 
     def forward(self, x):
@@ -320,7 +411,7 @@ class SpatialPyramidPool(nn.Module):
         self.in_ch = in_ch
         mid_ch = max(in_ch // 2, 4)
 
-        self.convin = nn.Conv2d(in_ch, mid_ch, kernel_size=3, padding=1, groups=in_ch)
+        self.convin = nn.Conv2d(in_ch, mid_ch, kernel_size=3, padding=1, groups=min(in_ch, mid_ch))
         self.pool1 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
         self.pool2 = nn.MaxPool2d(kernel_size=5, stride=1, padding=2)
         self.pool3 = nn.MaxPool2d(kernel_size=7, stride=1, padding=3)
@@ -367,7 +458,7 @@ class SSPF(nn.Module):
 
         self.convin = ConvNormAct(in_ch, mid_ch, kernel_size=1)
         self.pool = nn.MaxPool2d(kernel_size=5, stride=1, padding=2)
-        self.att = BiasedSqueezeAndExcitation(mid_ch * 4) if attention else nn.Identity()
+        self.att = ChannelAndSpatialAttention(mid_ch * 4) if attention else nn.Identity()
         self.convout = ConvNormAct(mid_ch * 4, out_ch, kernel_size=1)
 
     def forward(self, x):
@@ -439,38 +530,46 @@ class MVNetModel(nn.Module):
         super().__init__()
 
         self.stem = nn.Sequential(
-            nn.UpsamplingBilinear2d(scale_factor=0.5),
-            nn.Conv2d(3, 4, kernel_size=1),
-            nn.BatchNorm2d(4),
+            nn.Conv2d(3, 4, kernel_size=1)
         )
 
         self.backbone = nn.Sequential(
             # 80x60 input
 
-            #DownsampleConv(4, 4, mix_ch=True),  # 40x30
-            #SpatialPyramidPool(4),
+            # 40x30
+            DownsampleConv(4, 4),
+            SpatialPyramidPool(4),
 
-            DownsampleConv(4, 8, mix_ch=True),  # 20x15
-            SSPF(8),
+            # 20x15
+            DownsampleConv(4, 8),
+            SpatialPyramidPool(8),
 
-            # DenseBlock(
-            #     DownsampleConv(3, 9),          # 10x8
-            #     ConvNeXt(9, mul_ch=2),
-            #
-            #     ResidualBlock(
-            #         DownsampleConv(9, 18),     # 5x4
-            #         ConvNeXt(18, mul_ch=2),
-            #         UpsampleConv(18, 9, scale_factor=2)    # 10x8
-            #     ),
-            #
-            #     UpsampleConv(9, 3, size=(15, 20))          # 20x15
-            # ),
+            DenseBlock(
+                # 10x8
+                DownsampleConv(8, 16),
+                ConvNeXt(16, expansion_ratio=2, groups=4),
 
-            nn.Conv2d(8, 1, kernel_size=1)
+                ResidualBlock(
+                    # 5x4
+                    DownsampleConv(16, 16),
+
+                    ConvNeXt(16, expansion_ratio=2, groups=4),
+                    ConvNeXt(16, expansion_ratio=2, groups=4),
+
+                    # 10x8
+                    UpsampleConv(16, 16, scale_factor=2)
+                ),
+
+                ConvNeXt(16, expansion_ratio=2, groups=4),
+
+                # 20x15
+                UpsampleConv(16, 8, size=(15, 20))
+            ),
+
+            SSPF(16, 1),
         )
 
         self.head = nn.Identity()
-        self.detector = DetectionHead()
 
         #self.mean2x = torch.nn.Parameter(2. * torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1), requires_grad=False)
         #self.std = torch.nn.Parameter(torch.tensor([0.229, 0.224, 0.225]).reshape(-1, 1, 1), requires_grad=False)
@@ -488,12 +587,12 @@ class MVNetModel(nn.Module):
         return x
 
     def detect(self, x):
-        return self.detector(x)
+        return DetectionHead()(x)
 
     def deploy(self, finetuning=False):
         # Deploy sub modules
         for m in self.modules():
-            if hasattr(m, 'deploy'):
+            if hasattr(m, 'deploy') and self != m:
                 m.deploy()
 
         # Add the final detection head directly into the model
