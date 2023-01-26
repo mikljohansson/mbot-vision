@@ -501,7 +501,7 @@ class DetectionHead(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.act = LeakyHardSigmoid()
+        self.act = nn.Sigmoid()
 
         self.conv1 = DilatedGaussianFilter(3, 1)
         self.conv2 = DilatedGaussianFilter(3, 2)
@@ -523,6 +523,8 @@ class DetectionHead(nn.Module):
 
         # Avoid small overflows outside the range of [0, 1]
         return x.clamp(0., 1.)
+
+static_detection_head = DetectionHead()
 
 
 class MVNetModel(nn.Module):
@@ -587,7 +589,7 @@ class MVNetModel(nn.Module):
         return x
 
     def detect(self, x):
-        return DetectionHead()(x)
+        return static_detection_head(x)
 
     def deploy(self, finetuning=False):
         # Deploy sub modules
