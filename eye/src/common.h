@@ -3,8 +3,7 @@
 
 #include <Arduino.h>
 #include <Adafruit_SSD1306.h>
-
-#define LOG_TO_SDCARD false
+#include "wiring.h"
 
 extern Adafruit_SSD1306 oled;
 

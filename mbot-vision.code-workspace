@@ -4,10 +4,10 @@
 			"path": "eye"
 		},
 		{
-			"path": "mbot"
+			"path": "model"
 		},
 		{
-			"path": "model"
+			"path": "."
 		}
 	],
 	"settings": {
