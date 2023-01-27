@@ -52,7 +52,7 @@ See [wiring.h](eye/include/wiring.h) for how to wire up the ESP32 with the mBot
   high power LED's connected with a transistor and some suitably sized resistors.
 
 * You can use the `LOG_TO_SDCARD` configure the code to log to an SDcard. Since the SDcard pins are shared, 
-  it means that in this case you must also disconnect all other wires like the flash and mBot UART.
+  it means that in this case you must also disconnect all other wires like the floodlights and mBot connection.
 
 ## Inference engine
 
