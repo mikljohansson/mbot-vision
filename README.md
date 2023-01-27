@@ -134,7 +134,7 @@ Run `make train` to train and package the model. This will:
 * Pre-train on MS COCO images and some negative samples
 * Fine-tune on your recorded videos and images
 * Convert to TFlite format and quantize to `int8`
-* Convert to C++ files which are symlinked into the [eye] PlatformIO project
+* Convert to C++ files which are symlinked into the [eye/](eye/) PlatformIO project
 
 You will find the resulting models stored in `model/experiments/branchname/date`.
 
