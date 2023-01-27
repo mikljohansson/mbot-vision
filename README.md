@@ -1,6 +1,6 @@
 # MBot Vision
 
-Equip your Makeblock mBot with a cheap ESP32-CAM which uses machine learning to locate objects 
+Equip your [Makeblock mBot](https://www.makeblock.com/) with a cheap ESP32-CAM which uses machine learning to locate objects 
 you train it to. The included example will make the mBot see and chase after colored balls!
 
 You can make it recognize other object types by recording some videos and retraining. The 
