@@ -24,6 +24,7 @@ typedef struct _WifiNetwork {
 static WifiNetwork wifiNetworks[] = {
     {"krokodil", "mistress"},
     {"dlink-BF60", "ptfmm78341"},
+    //{"mikl-samsung-g9", "password"},
 };
 
 static const char *hostname = "mbot";
@@ -71,6 +72,9 @@ void setup() {
     if (!LOG_TO_SDCARD) {
         mbot.begin();
     }
+
+    // Start the camera frame capture task (start this before initializing the wifi, otherwise brownouts and wifi connections issues arise)
+    camera.begin();
 
     // Connect to Wifi
     oledPrint("WiFi connecting");
@@ -127,9 +131,6 @@ void setup() {
         Serial.println("Initializing memory card");
         logger.begin();
     }
-
-    // Start the camera frame capture task
-    camera.begin();
 
     // Start object detector
     detector.begin();

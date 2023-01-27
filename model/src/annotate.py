@@ -15,7 +15,7 @@ parser.add_argument('-i', '--input', required=True, help='Directory of images to
 parser.add_argument('-a', '--annotated', required=True, help='Directory to store annotated images')
 parser.add_argument('-t', '--train', required=True, help='Directory to store training images')
 parser.add_argument('-c', '--classes', required=True, help='Comma separated list of classes of interest')
-parser.add_argument('--batch-size', type=int, help='Batch size', default=8)
+parser.add_argument('--batch-size', type=int, help='Batch size', default=32)
 parser.add_argument('--input-width', type=int, help='Input width', default=160)
 parser.add_argument('--input-height', type=int, help='Input height', default=120)
 args = parser.parse_args()

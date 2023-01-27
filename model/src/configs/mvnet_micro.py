@@ -2,8 +2,8 @@ from src.models.mvnet import MVNetModel
 
 model = dict(
     type=MVNetModel,
-    input_size=(80, 60),    # WxH
-    output_size=(20, 15),   # WxH
+    input_size=(80, 48),    # WxH
+    output_size=(20, 12),   # WxH
 )
 
 solver = dict(

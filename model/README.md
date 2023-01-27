@@ -23,7 +23,7 @@ make summary
 EXPERIMENT=experiments/mobilenet-micro/20220708-100725F make summary-tflite
 ```
 
-# Training
+# Training & validation
 
 Put training videos into `dataset/recorded/videos` and training images into `dataset/recorded/images`. 
 
@@ -45,6 +45,8 @@ Run `make train` to train and package the model. This will:
 * Quantize to int8 and convert to TFlite
 * Convert to C++ files which are symlinked into the `mbot-vision/eye` project
 
+Run `EXPERIMENT=experiments/something/date make validate` to run validation using both PyTorch and the quantized TFLite model
+
 Examples:
 ```
 # Start tensorboard in the background
@@ -55,6 +57,9 @@ make dataset
 
 # Use specific GPU for training. Will use all available GPU's if CUDA_VISIBLE_DEVICES isn't set.
 CUDA_VISIBLE_DEVICES=0 PARALLEL=2 make train
+
+# Run inference on a sample of images, the output ends up in experiments/something/date/validation
+EXPERIMENT=experiments/something/date make validate
 ```
 
 If you use multiple GPU's to train, or if you change the batch size then you'd need to also tune 

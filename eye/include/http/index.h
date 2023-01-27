@@ -94,8 +94,8 @@ String indexDocument = R"doc(<html>
 
       #crosshair {
         position: absolute;
-        color: white;
-        font-size: 200%;
+        color: #999;
+        font-size: 500%;
         transform: translate(-50%, -50%);
         display: none;
       }

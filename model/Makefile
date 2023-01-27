@@ -27,9 +27,15 @@ DEPLOY ?= no
 
 # Model input and output dimensions
 INPUT_WIDTH	= 80
-INPUT_HEIGHT = 60
+INPUT_HEIGHT = 48
 OUTPUT_WIDTH = 20
-OUTPUT_HEIGHT = 15
+OUTPUT_HEIGHT = 12
+
+# PyTorch uses channels-first but tflite uses channels-last. By default this will cause onnx_tf to put a lot of TRANSPOSE
+# operators into the graph, which makes the model at least 3x slower. Setting this to channels-last makes convert.py
+# try to convert the model to channels-last, to optimize performance. See https://github.com/PINTO0309/onnx2tf
+#MEMORY_FORMAT = CHANNELS_FIRST
+MEMORY_FORMAT = CHANNELS_LAST
 
 # YOLOv6 trains with total batch size 64-256 for 500k-2M optimization steps (400 epochs) on COCO dataset (328k images, 80 classes)
 COCO_EPOCHS ?= 200
@@ -92,7 +98,7 @@ $(EXPERIMENT)/recorded.pth:
 #--resume $<
 
 $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
-	PYTHONPATH=. python src/convert.py -m $< -d dataset/recorded/train
+	PYTHONPATH=. python src/convert.py -m $< -d dataset/recorded/train $(shell if [ "$(MEMORY_FORMAT)" = "CHANNELS_LAST" ]; then echo "--channels-last"; fi)
 
 $(EXPERIMENT)/recorded.tmdl: $(EXPERIMENT)/recorded.tflite
 	python ../../TinyMaix/tools/tflite2tmdl.py $< $@ int8 0 $(INPUT_HEIGHT),$(INPUT_WIDTH),3 $(OUTPUT_HEIGHT),$(OUTPUT_WIDTH),1
@@ -113,12 +119,14 @@ output/mbot-vision-model.cpp: $(EXPERIMENT)/recorded.$(INFERENCE_EXTENSION)
 	sed -i 's/<OUTPUT_WIDTH>/$(OUTPUT_WIDTH)/g' $(dir $@)/mbot-vision-model.h
 	sed -i 's/<OUTPUT_HEIGHT>/$(OUTPUT_HEIGHT)/g' $(dir $@)/mbot-vision-model.h
 	sed -i 's/<INFERENCE_ENGINE>/$(INFERENCE_ENGINE)/g' $(dir $@)/mbot-vision-model.h
+	sed -i 's/<MEMORY_FORMAT>/$(MEMORY_FORMAT)/g' $(dir $@)/mbot-vision-model.h
 
 train: output/mbot-vision-model.cpp
 
 validate: $(EXPERIMENT)/recorded.pth $(EXPERIMENT)/recorded.tflite
 	PYTHONPATH=. python src/validate.py -d dataset/recorded/train \
-		-m $(EXPERIMENT)/recorded.pth -t $(EXPERIMENT)/recorded.tflite
+		-m $(EXPERIMENT)/recorded.pth -t $(EXPERIMENT)/recorded.tflite \
+		$(shell if [ "$(MEMORY_FORMAT)" = "CHANNELS_LAST" ]; then echo "--channels-last"; fi)
 
 # Print a model summary
 summary:

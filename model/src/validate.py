@@ -14,6 +14,7 @@ parser = argparse.ArgumentParser(description='Summarize adcopy')
 parser.add_argument("-m", "--torch-model", required=True, help="Input model in .pth format")
 parser.add_argument("-t", "--tflite-model", required=True, help="Input model in .tflite format")
 parser.add_argument("-d", "--dataset", required=True, help="Directory of sample images")
+parser.add_argument("--channels-last", action="store_true", help="Use channels-last format for the input image")
 args = parser.parse_args()
 
 checkpoint = torch.load(args.torch_model)
@@ -50,7 +51,11 @@ for inputs, _, _ in dataloader:
     mask = mask.resize(image.size, resample=Image.Resampling.NEAREST)
     mask.save(os.path.join(os.path.dirname(args.torch_model), 'validation/%03d-torch.png' % image_count))
 
-    inputs_tf = tf.convert_to_tensor(np.moveaxis((inputs * 127).numpy(), 1, 3), dtype=tf.int8)
+    inputs_np = (inputs * 127).numpy()
+    if args.channels_last:
+        inputs_np = np.moveaxis(inputs_np, 1, 3)
+
+    inputs_tf = tf.convert_to_tensor(inputs_np, dtype=tf.int8)
     interpreter.allocate_tensors()
     interpreter.set_tensor(tflite_inputs[0]['index'], inputs_tf)
     interpreter.invoke()
@@ -58,6 +63,10 @@ for inputs, _, _ in dataloader:
 
     mask_tf = (results_tf[0].astype(np.float32) + 127.) / 255.
     mask_tf = (mask_tf.clip(0., 1.) * 255.).astype(np.uint8)
+
+    if not args.channels_last:
+        mask_tf = np.moveaxis(mask_tf, 0, 2)
+
     mask_tf = torchvision.transforms.functional.to_pil_image(mask_tf)
     #mask_tf = torchvision.transforms.functional.to_pil_image((mask_tf * 255).astype(np.uint8))
     mask_tf = mask_tf.resize(image.size, resample=Image.Resampling.NEAREST)

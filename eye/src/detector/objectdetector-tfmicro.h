@@ -19,12 +19,19 @@ static uint8_t *tensor_arena;
 
 static TfLiteTensor *_input;
 
+#ifdef MBOT_VISION_CHANNELS_LAST
+static const bool channels_last = true;
+#else
+static const bool channels_last = false;
+#endif
+
 static void cropAndQuantizeImage(const uint8_t *pixels, size_t image_width, size_t image_height, int8_t *target) {
+    /*
     for (const uint8_t *plast = pixels + image_width * image_height; pixels < plast; pixels++, target++) {
         *target = ((int)*pixels) + 127;
     }
+    */
 
-    /*
     const size_t left = (image_width - MBOT_VISION_MODEL_INPUT_WIDTH) / 2;
     const size_t right = image_width - left - MBOT_VISION_MODEL_INPUT_WIDTH;
     const size_t top = (image_height - MBOT_VISION_MODEL_INPUT_HEIGHT) / 2;
@@ -34,21 +41,36 @@ static void cropAndQuantizeImage(const uint8_t *pixels, size_t image_width, size
     const uint8_t* source = pixels + (top * image_width + left) * 3;
     const size_t pixel_count = MBOT_VISION_MODEL_INPUT_WIDTH * MBOT_VISION_MODEL_INPUT_HEIGHT;
 
-    // Input and target is stored in HWC format
+    if (channels_last) {
+        // Input and target is stored in HWC format
+        for (size_t y = 0; y < MBOT_VISION_MODEL_INPUT_HEIGHT; y++) {
+            for (size_t x = 0; x < MBOT_VISION_MODEL_INPUT_WIDTH; x++) {
+                target[0] = ((int)source[0]) - 127;
+                target[1] = ((int)source[1]) - 127;
+                target[2] = ((int)source[2]) - 127;
+                
+                target += 3;
+                source += 3;
+            }
 
-    for (size_t y = 0; y < MBOT_VISION_MODEL_INPUT_HEIGHT; y++) {
-        for (size_t x = 0; x < MBOT_VISION_MODEL_INPUT_WIDTH; x++) {
-            target[0] = ((int)source[0]) - 127;
-            target[1] = ((int)source[1]) - 127;
-            target[2] = ((int)source[2]) - 127;
-            
-            target += 3;
-            source += 3;
+            source += (right + left) * 3;
         }
-
-        source += (right + left) * 3;
     }
-    */
+    else {
+        // Input is stored in HWC format, target needs to be CHW format
+        for (size_t y = 0; y < MBOT_VISION_MODEL_INPUT_HEIGHT; y++) {
+            for (size_t x = 0; x < MBOT_VISION_MODEL_INPUT_WIDTH; x++) {
+                target[0] = ((int)source[0]) - 127;
+                target[pixel_count] = ((int)source[1]) - 127;
+                target[pixel_count * 2] = ((int)source[2]) - 127;
+                
+                target++;
+                source += 3;
+            }
+
+            source += (right + left) * 3;
+        }
+    }
 }
 
 ObjectDetector::ObjectDetector()
@@ -92,7 +114,7 @@ void ObjectDetector::begin() {
         // NOLINTNEXTLINE(runtime-global-variables)
 
         // NOTE: Don't forget to change the max number of ops in the template
-        static tflite::MicroMutableOpResolver<25> micro_op_resolver;
+        static tflite::MicroMutableOpResolver<27> micro_op_resolver;
         micro_op_resolver.AddAdd();
         //micro_op_resolver.AddBatchMatMul();
         micro_op_resolver.AddConcatenation();
@@ -109,6 +131,7 @@ void ObjectDetector::begin() {
         micro_op_resolver.AddPad();
         micro_op_resolver.AddQuantize();
         micro_op_resolver.AddRelu();
+        micro_op_resolver.AddReduceMax();
         micro_op_resolver.AddReshape();
         micro_op_resolver.AddResizeNearestNeighbor();
         micro_op_resolver.AddRsqrt();
@@ -117,6 +140,7 @@ void ObjectDetector::begin() {
         micro_op_resolver.AddSquaredDifference();
         micro_op_resolver.AddStridedSlice();
         micro_op_resolver.AddSub();
+        micro_op_resolver.AddSum();
         micro_op_resolver.AddTranspose();
         micro_op_resolver.AddTransposeConv();
 
@@ -135,15 +159,27 @@ void ObjectDetector::begin() {
         // Get information about the memory area to use for the model's input.
         _input = interpreter->input(0);
 
-        if ((_input->dims->size != 4) || 
-            (_input->dims->data[0] != 1) ||
-            (_input->dims->data[1] != MBOT_VISION_MODEL_INPUT_HEIGHT) ||
-            (_input->dims->data[2] != MBOT_VISION_MODEL_INPUT_WIDTH) ||
-            (_input->dims->data[3] != 3) || 
-            (_input->type != kTfLiteInt8)) {
-            MicroPrintf(
-                                "The models input tensor shape and type doesn't match what's expected by objectdetector.cc");
-            return;
+        if (channels_last) {
+            if ((_input->dims->size != 4) || 
+                (_input->dims->data[0] != 1) ||
+                (_input->dims->data[1] != MBOT_VISION_MODEL_INPUT_HEIGHT) ||
+                (_input->dims->data[2] != MBOT_VISION_MODEL_INPUT_WIDTH) ||
+                (_input->dims->data[3] != 3) || 
+                (_input->type != kTfLiteInt8)) {
+                MicroPrintf("The models input tensor shape and type doesn't match what's expected by objectdetector-tflite.h");
+                return;
+            }
+        }
+        else {
+            if ((_input->dims->size != 4) || 
+                (_input->dims->data[0] != 1) ||
+                (_input->dims->data[1] != 3) ||
+                (_input->dims->data[2] != MBOT_VISION_MODEL_INPUT_HEIGHT) ||
+                (_input->dims->data[3] != MBOT_VISION_MODEL_INPUT_WIDTH) || 
+                (_input->type != kTfLiteInt8)) {
+                MicroPrintf("The models input tensor shape and type doesn't match what's expected by objectdetector-tflite.h");
+                return;
+            }
         }
     }
     catch (std::exception &e) {
@@ -235,8 +271,11 @@ void ObjectDetector::run() {
             }
 
             float probability = ((float)maxv + 127) / 255;
-            if (probability >= 0.1) {
-                _detected = {(float)maxx / MBOT_VISION_MODEL_OUTPUT_WIDTH, (float)maxy / MBOT_VISION_MODEL_OUTPUT_HEIGHT, true};
+            if (probability >= 0.6) {
+                _detected = {
+                    ((float)maxx + 0.5f) / MBOT_VISION_MODEL_OUTPUT_WIDTH, 
+                    ((float)maxy + 0.5f) / MBOT_VISION_MODEL_OUTPUT_HEIGHT,
+                    true};
                 serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f (decompress %dms, inference %dms, total %dms)\n", 
                     _detected.x, _detected.y, probability, decompress.took(), inference.took(), frame.took());
             }

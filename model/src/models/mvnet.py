@@ -87,6 +87,7 @@ class Sum(nn.Module):
 class UpsampleConv(nn.Sequential):
     def __init__(self, in_ch, out_ch, kernel_size=3, scale_factor=None, size=None):
         super().__init__(
+            nn.Conv2d(in_ch, in_ch, kernel_size=1),
             nn.UpsamplingNearest2d(size=size, scale_factor=scale_factor),
             nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, padding=1, groups=out_ch),
             nn.BatchNorm2d(out_ch),
@@ -112,69 +113,31 @@ class DownsampleConv(nn.Sequential):
         )
 
 
-class LeakySigmoid(nn.Module):
-    """
-    Avoids vanishing gradients problem with regular sigmoid function
-    https://arxiv.org/abs/1906.03504
-    """
-    def __init__(self):
-        super(LeakySigmoid, self).__init__()
-        self.deployed = False
-
-    def deploy(self):
-        self.deployed = True
-
-    def forward(self, x):
-        y = torch.sigmoid(x)
-        if not self.deployed:
-            y = y + x * 0.001
-        return y
-
-
-class LeakyHardSigmoid(nn.Module):
-    """
-    Avoids vanishing gradients problem with regular sigmoid function and is more performant
-    """
-    def __init__(self):
-        super(LeakyHardSigmoid, self).__init__()
-        self.deployed = False
-
-    def deploy(self):
-        self.deployed = True
-
-    def forward(self, x):
-        y = F.relu6(x + 3., inplace=self.deployed) / 6. + x * 0.001
-        if not self.deployed:
-            y = y + x * 0.001
-        return y
-
-
-class LeakyReLU6(nn.Module):
-    """
-    Avoids dying-ReLU problem with regular ReLU function
-    """
-    def __init__(self):
-        super(LeakyReLU6, self).__init__()
-        self.deployed = False
-
-    def deploy(self):
-        self.deployed = True
-
-    def forward(self, x):
-        y = F.relu6(x, inplace=self.deployed)
-        if not self.deployed:
-            y = y + x * 0.001
-        return y
-
-
 class ConvNormAct(nn.Sequential):
     def __init__(self, in_ch, out_ch, kernel_size, attention=False, **kwargs):
         super().__init__(
             nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, **kwargs),
             nn.BatchNorm2d(out_ch),
             BiasedSqueezeAndExcitation(out_ch) if attention else nn.Identity(),
-            LeakyReLU6(),
+            nn.ReLU(),
         )
+
+
+class ChannelShuffle(nn.Module):
+    """
+    PyTorch nn.ChannelShuffle doesn't have CUDA support
+    """
+    def __init__(self, groups):
+        super().__init__()
+        self.groups = groups
+
+    def forward(self, x):
+        # https://github.com/MG2033/ShuffleNet/blob/master/layers.py#L238
+        n, c, h, w = x.shape
+        x = x.reshape((n, self.groups, c // self.groups, h, w))
+        x = x.transpose(2, 1)
+        x = x.reshape((n, c, h, w))
+        return x
 
 
 class BiasedSqueezeAndExcitation(nn.Module):
@@ -188,10 +151,10 @@ class BiasedSqueezeAndExcitation(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.maxpool = nn.AdaptiveMaxPool2d(1)
         self.conv_map = nn.Conv2d(in_ch * 2, mid_ch, kernel_size=1)
-        self.mid_act = LeakyReLU6()
+        self.mid_act = nn.ReLU()
         self.conv_bias = nn.Conv2d(mid_ch, in_ch, kernel_size=1)
         self.conv_mul = nn.Conv2d(mid_ch, in_ch, kernel_size=1)
-        self.act_mul = LeakyHardSigmoid()
+        self.act_mul = nn.Sigmoid()
 
     def factors(self, x):
         y1 = self.avgpool(x)
@@ -244,7 +207,7 @@ class ChannelAndSpatialAttention(nn.Module):
             Sum(dim=1, keepdim=True)
         )
 
-        self.act_mul = LeakyHardSigmoid()
+        self.act_mul = nn.Sigmoid()
 
     def forward(self, x):
         # Moderate which input channels to pay spatial attention to
@@ -295,14 +258,14 @@ class GlobalAttention(nn.Module):
 
         self.mul_term = nn.Sequential(
             nn.Conv2d(in_ch * self.attention_heads, mid_ch, 1),
-            LeakyReLU6(),
+            nn.ReLU(),
             nn.Conv2d(mid_ch, in_ch, 1),
-            LeakyHardSigmoid()
+            nn.Sigmoid()
         )
 
         self.bias_term = nn.Sequential(
             nn.Conv2d(in_ch * self.attention_heads, mid_ch, 1),
-            LeakyReLU6(),
+            nn.ReLU(),
             nn.Conv2d(mid_ch, in_ch, 1),
         )
 
@@ -374,9 +337,10 @@ class ParallelGhostAttention(nn.Sequential):
                 ),
             ),
             BiasedSqueezeAndExcitation(mid_ch * 3),
-            nn.ChannelShuffle(3),
-            nn.Conv2d(mid_ch * 3, out_ch, 1, groups=mid_ch),
-            LeakyHardSigmoid(),
+            #ChannelShuffle(3),
+            #nn.Conv2d(mid_ch * 3, out_ch, 1, groups=mid_ch),
+            nn.Conv2d(mid_ch * 3, out_ch, 1),
+            nn.Sigmoid(),
             nn.UpsamplingNearest2d(scale_factor=2)
         )
 
@@ -392,8 +356,8 @@ class ConvNeXt(nn.Sequential):
             nn.Conv2d(in_ch, in_ch, kernel_size=kernel_size, padding=1, groups=in_ch),
             nn.BatchNorm2d(in_ch),
             nn.Conv2d(in_ch, mid_ch, kernel_size=1, groups=groups),
-            ChannelAndSpatialAttention(mid_ch) if attention else nn.Identity(),
-            LeakyReLU6(),
+            #ChannelAndSpatialAttention(mid_ch) if attention else nn.Identity(),
+            nn.ReLU(),
             nn.Conv2d(mid_ch, in_ch, kernel_size=1, groups=groups),
         )
 
@@ -417,10 +381,12 @@ class SpatialPyramidPool(nn.Module):
         self.pool3 = nn.MaxPool2d(kernel_size=7, stride=1, padding=3)
         self.att1 = BiasedSqueezeAndExcitation(mid_ch * 4) if attention else nn.Identity()
         self.norm = nn.BatchNorm2d(mid_ch * 4)
-        self.shuffle = nn.ChannelShuffle(4)
-        self.convmid = nn.Conv2d(mid_ch * 4, in_ch, kernel_size=1, groups=4)
+        #self.shuffle = ChannelShuffle(4)
+        #self.convmid = nn.Conv2d(mid_ch * 4, in_ch, kernel_size=1, groups=4)
+        self.shuffle = nn.Identity()
+        self.convmid = nn.Conv2d(mid_ch * 4, in_ch, kernel_size=1)
         self.att2 = BiasedSqueezeAndExcitation(in_ch) if attention else nn.Identity()
-        self.act = LeakyReLU6()
+        self.act = nn.ReLU()
         self.convout = nn.Conv2d(in_ch, in_ch, kernel_size=1)
 
     def forward(self, x):
@@ -452,14 +418,14 @@ class SSPF(nn.Module):
     """
     Spatial Pyramid Pool Fast from YOLOv5/v8 with optional channel attention
     """
-    def __init__(self, in_ch, out_ch, attention=True):
+    def __init__(self, in_ch, out_ch, attention=False):
         super().__init__()
         mid_ch = in_ch // 2
 
         self.convin = ConvNormAct(in_ch, mid_ch, kernel_size=1)
         self.pool = nn.MaxPool2d(kernel_size=5, stride=1, padding=2)
         self.att = ChannelAndSpatialAttention(mid_ch * 4) if attention else nn.Identity()
-        self.convout = ConvNormAct(mid_ch * 4, out_ch, kernel_size=1)
+        self.convout = nn.Conv2d(mid_ch * 4, out_ch, kernel_size=1)
 
     def forward(self, x):
         y1 = self.convin(x)
@@ -524,15 +490,14 @@ class DetectionHead(nn.Module):
         # Avoid small overflows outside the range of [0, 1]
         return x.clamp(0., 1.)
 
-static_detection_head = DetectionHead()
-
 
 class MVNetModel(nn.Module):
     def __init__(self, config):
         super().__init__()
 
         self.stem = nn.Sequential(
-            nn.Conv2d(3, 4, kernel_size=1)
+            nn.Conv2d(3, 4, kernel_size=1),
+            nn.BatchNorm2d(4)
         )
 
         self.backbone = nn.Sequential(
@@ -556,6 +521,7 @@ class MVNetModel(nn.Module):
                     DownsampleConv(16, 16),
 
                     ConvNeXt(16, expansion_ratio=2, groups=4),
+                    nn.Conv2d(16, 16, kernel_size=1),
                     ConvNeXt(16, expansion_ratio=2, groups=4),
 
                     # 10x8
@@ -565,13 +531,14 @@ class MVNetModel(nn.Module):
                 ConvNeXt(16, expansion_ratio=2, groups=4),
 
                 # 20x15
-                UpsampleConv(16, 8, size=(15, 20))
+                UpsampleConv(16, 8, scale_factor=2)
             ),
 
             SSPF(16, 1),
         )
 
         self.head = nn.Identity()
+        self.detectionhead = DetectionHead()
 
         #self.mean2x = torch.nn.Parameter(2. * torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1), requires_grad=False)
         #self.std = torch.nn.Parameter(torch.tensor([0.229, 0.224, 0.225]).reshape(-1, 1, 1), requires_grad=False)
@@ -589,7 +556,7 @@ class MVNetModel(nn.Module):
         return x
 
     def detect(self, x):
-        return static_detection_head(x)
+        return self.detectionhead(x)
 
     def deploy(self, finetuning=False):
         # Deploy sub modules

@@ -12,4 +12,6 @@ extern const unsigned int mbot_vision_model_len;
 
 #define MBOT_VISION_INFERENCE_<INFERENCE_ENGINE> 1
 
+#define MBOT_VISION_<MEMORY_FORMAT> 1
+
 #endif
