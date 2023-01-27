@@ -107,7 +107,7 @@ The dataset generation pipeline can use two sources of data
 
 ### Configuring what types of object to detect
 
-See the comma separated lists of COCO classes in the [Makefile](model/Makefile) in the `PRIMARY_CLASSES` and `SECONDARY_CLASSES` variables. Here's the [model/src/coco-labels-2014_2017.txt|full list] of available classes.
+See the comma separated lists of COCO classes in the [Makefile](model/Makefile) in the `PRIMARY_CLASSES` and `SECONDARY_CLASSES` variables. Here's the [full list](model/src/coco-labels-2014_2017.txt) of available classes.
 
 Edit `PRIMARY_CLASSES` to include the classes you're interested in detecting. Edit `SECONDARY_CLASSES` to include any classes that are often confused with the primary classes. For example apples and oranges can easily be confused for sports balls :)
 
