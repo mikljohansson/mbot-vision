@@ -1,11 +1,11 @@
 # MBot Vision
 
-Equip your [Makeblock mBot](https://www.makeblock.com/) with a cheap ESP32-CAM which uses machine learning to locate objects 
-you train it to. The included example will make the mBot see and chase after colored balls!
+Equip your [Makeblock mBot](https://www.makeblock.com/) with a cheap ESP32-CAM which uses machine learning 
+to locate objects you train it to. The included example will make the mBot see and chase after colored balls!
 
 You can make it recognize other object types by recording some videos and retraining. The 
-[model/](model/) folder contains a PyTorch -> TFlite-micro training pipeline. You can record your
-own videos and photos and drop them into the dataset folder to train on.
+[model/](model/) folder contains a dataset creation and model training pipeline. You can record 
+your own videos and photos and drop them into the dataset folder to train on.
 
 The ESP32 communicates the object location to the mBot using a simple PWM encoding. This
 ensure it can be read from the kids-friendly Scratch / Blocks programming IDE. For example 
@@ -17,15 +17,43 @@ also show you the model inputs (low-res images) and outputs (object heatmaps).
 
 # Programming the ESP32
 
+## Inference engines
+
+This project uses a [ESP32 specific flavor](https://github.com/espressif/tflite-micro-esp-examples) 
+of [TensorFlow Lite for Microcontrollers](https://github.com/tensorflow/tflite-micro) as the default 
+inference engine. 
+
+There's also experimental support for [TinyMaix](https://github.com/sipeed/TinyMaix) but this inference 
+engine doesn't support so many of the TFLite operators so you'll need to really strip down the 
+model to be able to run it.
+
+## Setup tflite-micro
+
+You need to prepare the ESP32 specific tflite-micro distribution a bit in order to make it usable from PlatformIO
+and get the ESP32 optimized kernels. These kernels can make a 3x factor change in inference performance on the 
+ESP32, or even more on an ESP32-S3.
+
 ```
-git clone --recurse-submodules https://github.com/espressif/tflite-micro-esp-examples.git
 git clone https://github.com/mikljohansson/mbot-vision.git
 
-# Remove ESP32-S3 specific assembler files which cause build errors
-find tflite-micro-esp-examples/components/esp-nn -name \*esp32s3\* -exec rm -f {} ";"
+# Clone the ESP32 flavor of the tflite-micro distribution
+git clone --recurse-submodules https://github.com/espressif/tflite-micro-esp-examples.git
+cd tflite-micro-esp-examples
+
+# Optionally update the tflite-micro base to get compatiblity with latest TFLite ops and kernels
+#scripts/sync_from_tflite_micro.sh
+
+# If you're not targeting an new ESP32-S3 MCU then remove all the optimized kernels for that architecture
+find components/esp-nn -name '*esp32s3*' -exec rm -f {} ';'
+
+# Remove all the default tfmicro kernels in favor of the ESP32 optimized kernels
+# https://github.com/espressif/tflite-micro-esp-examples#esp-nn-integration
+for f in components/tflite-lib/tensorflow/lite/micro/kernels/esp_nn/*.cc; do rm components/tflite-lib/tensorflow/lite/micro/kernels/`basename $f`; done
 ```
 
-* Open `mbot-vision.code-workspace` in Platform IO
+## Program the microcontroller using PlatformIO
+
+* Open `mbot-vision.code-workspace` in the [PlatformIO IDE](https://platformio.org/)
 * Remove (or change) `upload_port=` and `monitor_port=` from [platformio.ini](eye/platformio.ini)
 * Change the WiFi SSID and passwords in [eye.cpp](eye/src/eye.cpp)
 * Connect the ESP32 and program it
@@ -54,17 +82,27 @@ See [wiring.h](eye/include/wiring.h) for how to wire up the ESP32 with the mBot
 * You can use the `LOG_TO_SDCARD` configure the code to log to an SDcard. Since the SDcard pins are shared, 
   it means that in this case you must also disconnect all other wires like the floodlights and mBot connection.
 
-## Inference engine
+## FDTI programmer
 
-This project uses a [ESP32 specific flavor](https://github.com/espressif/tflite-micro-esp-examples) of [tflite-micro](https://github.com/tensorflow/tflite-micro) as the default inference engine. 
+The ESP32-CAM unfortunately doesn't have a RST pin, so in order to get the programmer to automatically put the 
+it into programming/flashing mode you need to solder a wire onto the inner connector of the RST button 
+and connect that to the RTS pin on the FTDI programmer. Doing this will allow you to upload new firmware
+without having to manually hold down the I00 and press the RST button.
 
-There's also experimental support for [TinyMaix](https://github.com/sipeed/TinyMaix) but this inference 
-engine doesn't support so many of the TFLite operators so you'll need to really strip down the 
-model to be able to run it.
+|Programmer|ESP32 CAM|
+|----------|---------|
+|5V        |5V       |
+|GND       |GND      |
+|TXD       |U0R      |
+|RXD       |U0T      |
+|DTR       |I00      |
+|RTS       |RST      |
 
 # Machine learning model
 
-There's code for a few different models available in [src/models](model/src/models) and which one to use can be configured in the [Makefile](model/Makefile). If you switch models you may also need to adjust the input and output dimensions in the Makefile. The model hyperparameters are configured in [src/configs](model/src/configs).
+There's code for a few different models available in [src/models](model/src/models) and which one to use can be 
+configured in the [Makefile](model/Makefile). If you switch models you may also need to adjust the input and output 
+dimensions in the Makefile. The model hyperparameters are configured in [src/configs](model/src/configs).
 
 You should probably start with the default model and see if you can get that working before you start
 changing models and building your own ;)
@@ -107,9 +145,12 @@ The dataset generation pipeline can use two sources of data
 
 ### Configuring what types of object to detect
 
-See the comma separated lists of COCO classes in the [Makefile](model/Makefile) in the `PRIMARY_CLASSES` and `SECONDARY_CLASSES` variables. Here's the [full list](model/src/coco-labels-2014_2017.txt) of available classes.
+See the comma separated lists of COCO classes in the [Makefile](model/Makefile) in the `PRIMARY_CLASSES` and 
+`SECONDARY_CLASSES` variables. Here's the [full list](model/src/coco-labels-2014_2017.txt) of available classes.
 
-Edit `PRIMARY_CLASSES` to include the classes you're interested in detecting. Edit `SECONDARY_CLASSES` to include any classes that are often confused with the primary classes. For example apples and oranges can easily be confused for sports balls :)
+Edit `PRIMARY_CLASSES` to include the classes you're interested in detecting. Edit `SECONDARY_CLASSES` to include 
+any classes that are often confused with the primary classes. For example apples and oranges can easily be 
+confused for sports balls :)
 
 ### Building the dataset
 
@@ -175,3 +216,52 @@ CUDA_VISIBLE_DEVICES= make train
 # Run inference on a sample of images, the output ends up in experiments/something/date/validation
 EXPERIMENT=experiments/something/date make validate
 ```
+
+# Setting up /dev aliases for the ESP32 and mBot
+
+You can setup /dev/something aliases for the different microcontroller, for example to avoid them
+getting assigned randomly as /dev/ttyUSB0 or /dev/ttyUSB1 when connecting multiple MCU's at the same time.
+
+See [this guide](https://medium.com/@darshankt/setting-up-the-udev-rules-for-connecting-multiple-external-devices-through-usb-in-linux-28c110cf9251)
+for how to setup aliases for the USB-to-serial chips that are used to program the ESP32 and mBot Arduino.
+
+```
+sudo vi /etc/udev/rules.d/99-usb-aliases.rules
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", SYMLINK+="ftdi"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="auriga"
+
+# sudo rm -f /usr/lib/udev/rules.d/90-brltty-device.rules
+
+sudo systemctl mask brltty-udev
+sudo systemctl mask brltty
+
+sudo systemctl stop brltty-udev
+sudo systemctl stop brltty
+
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+# Common issues
+
+## Invalid/corrupt model file
+
+```
+Starting object detector
+Guru Meditation Error: Core  1 panic'ed (LoadProhibited). Exception was unhandled.
+```
+
+```
+abort() was called at PC 0x400eafc8 on core 1
+```
+
+These errors probably means that the tflite file that is encoded into the model buffer 
+in `mbot-vision-model.cpp` is not a valid for some reason.
+
+## Camera initialization
+
+```
+Camera probe failed with error 0x20002.E (2827) gpio: gpio_install_isr_service(449): GPIO isr service already installed
+```
+
+Probably means the ESP32 just needs to be power-cycled.

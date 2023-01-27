@@ -7,9 +7,9 @@
 
 // Joystick comms with MBot (used if you program the mBot using Scratch / Blocks)
 #define MV_PWMX_CHAN    LEDC_CHANNEL_4
-#define MV_PWMX_PIN     MV_URX_PIN          // Maps to port 6 and pin 64 (A10) on Auriga
+#define MV_PWMX_PIN     2                   // Maps to port 6 and pin 64 (A10) on Auriga
 #define MV_PWMY_CHAN    LEDC_CHANNEL_5
-#define MV_PWMY_PIN     MV_UTX_PIN          // Maps to port 6 and pin 69 (A15) on Auriga
+#define MV_PWMY_PIN     14                  // Maps to port 6 and pin 69 (A15) on Auriga
 
 // Flash / floodlights
 #define MV_LED_PIN      33
