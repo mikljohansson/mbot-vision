@@ -73,8 +73,14 @@ void setup() {
         mbot.begin();
     }
 
-    // Start the camera frame capture task (start this before initializing the wifi, otherwise brownouts and wifi connections issues arise)
+    // Start the camera frame capture task. Start this before initializing the wifi and wait for the first 
+    // frame to be captured, otherwise sporadic brownouts and wifi connections issues arise.
     camera.begin();
+    fbqueue->release(fbqueue->take());
+
+    // Start object detector
+    detector.begin();
+    //detector.wait();
 
     // Connect to Wifi
     oledPrint("WiFi connecting");
@@ -131,9 +137,6 @@ void setup() {
         Serial.println("Initializing memory card");
         logger.begin();
     }
-
-    // Start object detector
-    detector.begin();
 
     // Start webserver
     httpdRun(detector);

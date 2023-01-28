@@ -87,7 +87,8 @@
 			"shared_mutex": "cpp",
 			"*.ipp": "cpp",
 			"stop_token": "cpp",
-			"tinymaix.h": "c"
+			"tinymaix.h": "c",
+			"semaphore": "cpp"
 		}
 	}
 }
