@@ -20,7 +20,7 @@ parser.add_argument('--input-width', type=int, help='Input width', default=160)
 parser.add_argument('--input-height', type=int, help='Input height', default=120)
 args = parser.parse_args()
 
-labels_of_interest = set(args.classes.split(','))
+labels_of_interest = set(filter(None, args.classes.split(',')))
 files = glob.glob(os.path.join(args.input, '*.jpg'))
 
 model = torch.hub.load('ultralytics/yolov5', 'yolov5x')
@@ -50,6 +50,10 @@ for i in range(0, len(files), args.batch_size):
         box = get_input_box(np.asarray(mask, dtype=np.uint8), args.input_width, args.input_height)
         image = image.resize((args.input_width, args.input_height), box=box, resample=Image.Resampling.LANCZOS)
         mask = mask.resize((args.input_width, args.input_height), box=box, resample=Image.Resampling.LANCZOS)
+
+        # Show the background with 25% transparency, just for debugging purposes.
+        mask = Image.fromarray(np.maximum(np.asarray(mask, dtype=np.uint8), 64), 'L')
+
         image = Image.merge('RGBA', (*image.split(), *mask.split()))
 
         targetname = os.path.join(args.train, os.path.splitext(os.path.basename(filename))[0] + '.png')

@@ -144,9 +144,9 @@ class BiasedSqueezeAndExcitation(nn.Module):
     """
     Channel attention Squeeze-and-Excitation block modified with inverted bottleneck and bias term
     """
-    def __init__(self, in_ch, expansion_ratio=4):
+    def __init__(self, in_ch, expansion_ratio=4.):
         super().__init__()
-        mid_ch = min(32, max(int(in_ch * expansion_ratio), 4))
+        mid_ch = max(int(in_ch * expansion_ratio), 4)
 
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.maxpool = nn.AdaptiveMaxPool2d(1)
@@ -176,7 +176,12 @@ class BiasedSqueezeAndExcitation(nn.Module):
 class ChannelAndSpatialAttention(nn.Module):
     """
     Channel and spatial attention module. Mix of CBAM and DFC attention and modified with biases
-    and multiple spatial attention heads.
+    and multiple spatial attention heads. Inspired by Axial Attention, but not using matrix multiplication
+
+    https://github.com/huawei-noah/Efficient-AI-Backbones/blob/master/ghostnetv2_pytorch/model/ghostnetv2_torch.py#L104
+    https://openreview.net/pdf/6db544c65bbd0fa7d7349508454a433c112470e2.pdf
+    https://medium.com/mlearning-ai/axial-self-attention-in-cnn-efficient-and-elegant-85d8ce2ca8eb
+    https://github.com/lucidrains/axial-attention
     """
     def __init__(self, in_ch, kernel_size=7, dilation=1, heads=4):
         super().__init__()
@@ -356,7 +361,7 @@ class ConvNeXt(nn.Sequential):
             nn.Conv2d(in_ch, in_ch, kernel_size=kernel_size, padding=1, groups=in_ch),
             nn.BatchNorm2d(in_ch),
             nn.Conv2d(in_ch, mid_ch, kernel_size=1, groups=groups),
-            #ChannelAndSpatialAttention(mid_ch) if attention else nn.Identity(),
+            BiasedSqueezeAndExcitation(mid_ch, expansion_ratio=0.5) if attention else nn.Identity(),
             nn.ReLU(),
             nn.Conv2d(mid_ch, in_ch, kernel_size=1, groups=groups),
         )
@@ -418,13 +423,13 @@ class SSPF(nn.Module):
     """
     Spatial Pyramid Pool Fast from YOLOv5/v8 with optional channel attention
     """
-    def __init__(self, in_ch, out_ch, attention=False):
+    def __init__(self, in_ch, out_ch, attention=True):
         super().__init__()
         mid_ch = in_ch // 2
 
-        self.convin = ConvNormAct(in_ch, mid_ch, kernel_size=1)
+        self.convin = ConvNormAct(in_ch, mid_ch, kernel_size=1, attention=attention)
         self.pool = nn.MaxPool2d(kernel_size=5, stride=1, padding=2)
-        self.att = ChannelAndSpatialAttention(mid_ch * 4) if attention else nn.Identity()
+        self.att = BiasedSqueezeAndExcitation(mid_ch * 4) if attention else nn.Identity()
         self.convout = nn.Conv2d(mid_ch * 4, out_ch, kernel_size=1)
 
     def forward(self, x):
@@ -528,17 +533,17 @@ class MVNetModel(nn.Module):
                     UpsampleConv(16, 16, scale_factor=2)
                 ),
 
-                ConvNeXt(16, expansion_ratio=2, groups=4),
+                # Enabling attention on this module causes issues (with the REDUCE_MAX operator) for some mystery reason
+                ConvNeXt(16, expansion_ratio=2, groups=4, attention=False),
 
                 # 20x15
                 UpsampleConv(16, 8, scale_factor=2)
             ),
 
-            SSPF(16, 1),
+            SSPF(16, 1)
         )
 
         self.head = nn.Identity()
-        self.detectionhead = DetectionHead()
 
         #self.mean2x = torch.nn.Parameter(2. * torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1), requires_grad=False)
         #self.std = torch.nn.Parameter(torch.tensor([0.229, 0.224, 0.225]).reshape(-1, 1, 1), requires_grad=False)
@@ -556,7 +561,7 @@ class MVNetModel(nn.Module):
         return x
 
     def detect(self, x):
-        return self.detectionhead(x)
+        return DetectionHead()(x.to('cpu'))
 
     def deploy(self, finetuning=False):
         # Deploy sub modules

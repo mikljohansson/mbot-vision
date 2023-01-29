@@ -8,6 +8,7 @@ import torch
 import torchvision
 import torch.nn.functional as F
 from PIL import Image
+from torch import nn
 from torch.utils.data import Dataset
 from torchvision.transforms import transforms
 
@@ -21,21 +22,28 @@ def denormalize(image):
 
 
 class ImageDataset(Dataset):
-    def __init__(self, images_path, target_size):
+    def __init__(self, images_path, input_size, target_size, apply_transforms=True):
         super(ImageDataset, self).__init__()
         self.target_size = target_size
 
         self.images = glob.glob(os.path.join(images_path, '*.png'))
         random.shuffle(self.images)
 
-        self.transforms = torch.nn.Sequential(
+        self.spatial_transforms = torch.nn.Sequential(
             transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomPerspective(p=0.2),
+            transforms.RandomVerticalFlip(p=0.5),
+            transforms.RandomApply(torch.nn.ModuleList([transforms.RandomRotation((-180, 180))]), p=0.2),
+            transforms.RandomApply(torch.nn.ModuleList([transforms.RandomResizedCrop(size=tuple(reversed(input_size)), scale=(0.5, 1.0),)]), p=0.2),
+            transforms.RandomPerspective(p=0.2)
+        ) if apply_transforms else nn.Identity()
+
+        self.color_transforms = torch.nn.Sequential(
+            transforms.RandomApply(torch.nn.ModuleList([transforms.RandomAdjustSharpness(sharpness_factor=2)]), p=0.2),
             transforms.RandomAutocontrast(p=0.2),
-            transforms.GaussianBlur(3),
-            transforms.ColorJitter(),
+            transforms.RandomApply(torch.nn.ModuleList([transforms.GaussianBlur(3)]), p=0.2),
+            transforms.RandomApply(torch.nn.ModuleList([transforms.ColorJitter()]), p=0.2),
             transforms.RandomGrayscale(p=0.2),
-        )
+        ) if apply_transforms else nn.Identity()
 
         self.gradient_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
 
@@ -49,11 +57,18 @@ class ImageDataset(Dataset):
         # RGBa (premultiplied alpha) when doing resizing and other operations.
         image = torchvision.transforms.functional.to_tensor(image)
 
-        # Apply randomized transforms
-        #image = self.transforms(image)
+        # Apply randomized spatial transforms
+        image = self.spatial_transforms(image)
 
+        # Separate the RGB and alpha channels
         target = image[[3]]
         image = image[0:3]
+
+        # Apply randomized color transforms
+        image = self.color_transforms(image)
+
+        # Clip transparency less than 75%
+        target = F.threshold(target, 0.5, 0.)
 
         # Downsample to same size as model output
         output_shape = (self.target_size[1], self.target_size[0])

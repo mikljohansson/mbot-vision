@@ -1,16 +1,7 @@
+# Coco classes of interest, see src/coco-labels-2014_2017.txt
 PRIMARY_CLASSES = sports ball
 SECONDARY_CLASSES = apple,orange
 CLASSES = $(PRIMARY_CLASSES),$(SECONDARY_CLASSES)
-
-PARALLEL ?= $(shell grep -c ^processor /proc/cpuinfo)
-GPU_COUNT ?= $(shell if [ "${CUDA_VISIBLE_DEVICES}" != "" ]; then echo "${CUDA_VISIBLE_DEVICES}" | tr "," " "| wc -w; else nvidia-smi --query-gpu=name --format=csv,noheader | grep -v -e '^$$' | wc -l; fi)
-
-LOGGING_DIR ?= experiments/$(shell git rev-parse --abbrev-ref HEAD)
-LOGGING_PATH := $(shell echo "$(LOGGING_DIR)/`date +'%Y%m%d-%H%M%S'`")
-EXPERIMENT ?= $(LOGGING_PATH)
-
-#ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision fp16
-ACCELERATE_ARGS := --mixed_precision fp16
 
 INFERENCE_ENGINE ?= TFMICRO
 #INFERENCE_ENGINE ?= TFMICRO_LEGACY
@@ -37,25 +28,43 @@ OUTPUT_HEIGHT = 12
 #MEMORY_FORMAT = CHANNELS_FIRST
 MEMORY_FORMAT = CHANNELS_LAST
 
-# YOLOv6 trains with total batch size 64-256 for 500k-2M optimization steps (400 epochs) on COCO dataset (328k images, 80 classes)
-COCO_EPOCHS ?= 200
+# Batch size used for YOLOv5 when annotating yur recorded data, you might need to lower this if your GPU runs out of memory
+YOLO_BATCH_SIZE ?= 32
+
+# Hyperparams for the pre-training on MS COCO images
+# - YOLOv6 trains with total batch size 64-256 for 500k-2M optimization steps (400 epochs) on COCO dataset (328k images, 80 classes)
+# - 10k steps seems fine for this little model
+COCO_EPOCHS ?= 100
 COCO_BATCH_SIZE ?= 64
 COCO_ACCUMULATION_STEPS ?= 1
 COCO_LEARNING_RATE ?= 1e-4
 COCO_MODEL_PATH ?= $(EXPERIMENT)/coco.pth
+COCO_MAX_SAMPLE_COUNT ?= 25000
 
-# 10k optimization steps seems to be fine for this little model
-REC_EPOCHS ?= 500
+# Hyperparams for the fine-tuning on recorded data
+# - 3k optimization steps seems to be fine for this little model
+REC_EPOCHS ?= 250
 REC_BATCH_SIZE ?= 64
 REC_ACCUMULATION_STEPS ?= 1
-REC_LEARNING_RATE ?= 1e-4
+REC_LEARNING_RATE ?= 5e-5
 
+PARALLEL ?= $(shell grep -c ^processor /proc/cpuinfo)
+GPU_COUNT ?= $(shell if [ "${CUDA_VISIBLE_DEVICES}" != "" ]; then echo "${CUDA_VISIBLE_DEVICES}" | tr "," " "| wc -w; else nvidia-smi --query-gpu=name --format=csv,noheader | grep -v -e '^$$' | wc -l; fi)
+
+LOGGING_DIR ?= experiments/$(shell git rev-parse --abbrev-ref HEAD)
+LOGGING_PATH := $(shell echo "$(LOGGING_DIR)/`date +'%Y%m%d-%H%M%S'`")
+EXPERIMENT ?= $(LOGGING_PATH)
+
+#ACCELERATE_ARGS := --multi_gpu --num_machines 1 --num_processes $(GPU_COUNT) --mixed_precision fp16
+ACCELERATE_ARGS := --mixed_precision fp16
+
+# Download training samples from MS COCO dataset
 dataset/coco/train: src/coco.py src/image.py
 	mkdir -p dataset/coco/train
-	touch dataset/coco/train
 	rm -f dataset/coco/train/*
 	PYTHONPATH=. python src/coco.py -c "$(PRIMARY_CLASSES)" -e "$(SECONDARY_CLASSES)" -t dataset/coco/train \
-		--input-width $(INPUT_WIDTH) --input-height $(INPUT_HEIGHT)
+		--input-width $(INPUT_WIDTH) --input-height $(INPUT_HEIGHT) --max-sample-count $(COCO_MAX_SAMPLE_COUNT)
+	touch dataset/coco/train
 
 # Extract 2 frames per second from a video
 dataset/recorded/frames/%_000001.jpg: dataset/recorded/videos/%.mp4
@@ -73,29 +82,28 @@ dataset/recorded/train: src/annotate.py src/image.py dataset/recorded/frames $(s
 
 	PYTHONPATH=. python src/annotate.py -c "$(CLASSES)" \
 		-i dataset/recorded/images -a dataset/recorded/annotated -t dataset/recorded/train \
-		--input-width $(INPUT_WIDTH) --input-height $(INPUT_HEIGHT)
+		--input-width $(INPUT_WIDTH) --input-height $(INPUT_HEIGHT) --batch-size $(YOLO_BATCH_SIZE)
 
 	PYTHONPATH=. python src/annotate.py -c "$(CLASSES)" \
 		-i dataset/recorded/frames -a dataset/recorded/annotated -t dataset/recorded/train \
-		--input-width $(INPUT_WIDTH) --input-height $(INPUT_HEIGHT)
+		--input-width $(INPUT_WIDTH) --input-height $(INPUT_HEIGHT) --batch-size $(YOLO_BATCH_SIZE)
 
 	touch dataset/recorded/train
 
-#dataset: dataset/coco/train dataset/recorded/train
-dataset: dataset/recorded/train
+dataset: dataset/coco/train dataset/recorded/train
+#dataset: dataset/recorded/train
 
 $(EXPERIMENT)/coco.pth:
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) --gradient_accumulation_steps $(COCO_ACCUMULATION_STEPS) \
 		src/train.py -m $(MODEL) -t dataset/coco/train -o $@ -p $(PARALLEL) --epochs $(COCO_EPOCHS) --batch-size $(COCO_BATCH_SIZE) \
-		--learning-rate $(COCO_LEARNING_RATE) --accumulation-steps $(COCO_ACCUMULATION_STEPS) --unknown-mask
+		--learning-rate $(COCO_LEARNING_RATE) --accumulation-steps $(COCO_ACCUMULATION_STEPS)
+#--unknown-mask
 
-$(EXPERIMENT)/recorded.pth:
-#$(COCO_MODEL_PATH)
+$(EXPERIMENT)/recorded.pth: $(COCO_MODEL_PATH)
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) --gradient_accumulation_steps $(REC_ACCUMULATION_STEPS) \
 		src/train.py -m $(MODEL) -p $(PARALLEL) -t dataset/recorded/train -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE) \
-		--learning-rate $(REC_LEARNING_RATE) --accumulation-steps $(REC_ACCUMULATION_STEPS)
+		--learning-rate $(REC_LEARNING_RATE) --accumulation-steps $(REC_ACCUMULATION_STEPS) --resume $<
 #--unknown-mask
-#--resume $<
 
 $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
 	PYTHONPATH=. python src/convert.py -m $< -d dataset/recorded/train $(shell if [ "$(MEMORY_FORMAT)" = "CHANNELS_LAST" ]; then echo "--channels-last"; fi)

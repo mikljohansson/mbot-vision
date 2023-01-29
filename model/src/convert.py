@@ -29,7 +29,7 @@ if hasattr(model, 'deploy'):
     model.deploy()
 model.eval()
 
-dataset = ImageDataset(args.dataset, target_size=cfg.model.output_size)
+dataset = ImageDataset(args.dataset, input_size=cfg.model.input_size, target_size=cfg.model.output_size, apply_transforms=False)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
 
 # Convert to ONNX

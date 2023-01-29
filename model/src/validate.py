@@ -19,7 +19,7 @@ args = parser.parse_args()
 
 checkpoint = torch.load(args.torch_model)
 model, cfg = create_model(checkpoint['model'])
-dataset = ImageDataset(args.dataset, target_size=cfg.model.output_size)
+dataset = ImageDataset(args.dataset, input_size=cfg.model.input_size, target_size=cfg.model.output_size, apply_transforms=False)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
 
 # Load the TFLite model

@@ -13,12 +13,13 @@ parser.add_argument('-e', '--exclude-classes', default='', help='Comma separated
 parser.add_argument('-t', '--train', required=True, help='Directory to store training images')
 parser.add_argument('--input-width', type=int, help='Input width', default=160)
 parser.add_argument('--input-height', type=int, help='Input height', default=120)
+parser.add_argument('--max-sample-count', required=True, type=int, help='Number of samples to try and get')
 args = parser.parse_args()
 
 # See https://towardsdatascience.com/how-to-work-with-object-detection-datasets-in-coco-format-9bf4fb5848a4
 
-labels_of_interest = args.classes.split(',')
-exclude_labels = args.exclude_classes.split(',')
+labels_of_interest = list(filter(None, args.classes.split(',')))
+exclude_labels = list(filter(None, args.exclude_classes.split(',')))
 coco_labels = set(line.strip() for line in open(os.path.join(os.path.dirname(__file__), 'coco-labels-2014_2017.txt'), 'r'))
 coco_bad_samples = set(line.strip() for line in open(os.path.join(os.path.dirname(__file__), 'coco-bad-samples.txt'), 'r'))
 
@@ -65,6 +66,9 @@ def render_sample(sample, classes, positive_sample=True):
     mask = mask.resize((args.input_width, args.input_height), box=box, resample=Image.Resampling.LANCZOS)
     image = image.resize((args.input_width, args.input_height), box=box, resample=Image.Resampling.LANCZOS)
 
+    # Show the background with 25% transparency, just for debugging purposes.
+    mask = Image.fromarray(np.maximum(np.asarray(mask, dtype=np.uint8), 64), 'L')
+
     image = Image.merge('RGBA', (*image.split(), *mask.split()))
 
     targetname = os.path.join(args.train, os.path.splitext(os.path.basename(sample.filepath))[0] + '.png')
@@ -79,7 +83,7 @@ dataset = foz.load_zoo_dataset(
     split="train",
     label_types=["segmentations"],
     classes=labels_of_interest,
-    #max_samples=10
+    max_samples=args.max_sample_count
 )
 
 try:

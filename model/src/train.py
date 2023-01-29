@@ -30,7 +30,8 @@ parser.add_argument('--epochs', type=int, help='Number of epochs', default=1)
 parser.add_argument('--batch-size', type=int, help='Batch size', default=4)
 parser.add_argument('--learning-rate', type=float, help='Learning rate', default=1e-3)
 parser.add_argument('--accumulation-steps', type=int, help='Gradient accumulation steps', default=1)
-parser.add_argument('--unknown-mask', action='store_true', help='Don\'t apply loss for unknown mask', default=False)
+parser.add_argument('--unknown-mask', action='store_true',
+                    help='Mask out the loss from the borders of the object, where the prediction can be uncertain (unknown mask)')
 args = parser.parse_args()
 
 output_dir = os.path.dirname(args.output)
@@ -57,9 +58,9 @@ model, cfg = create_model(args.model)
 
 if args.resume:
     logger.info(f'Loading pretrained weights from {args.resume}')
-    model.load_state_dict(torch.load(args.resume))
+    model.load_state_dict(torch.load(args.resume)['state'])
 
-dataset = ImageDataset(args.train, target_size=cfg.model.output_size)
+dataset = ImageDataset(args.train, input_size=cfg.model.input_size, target_size=cfg.model.output_size)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.parallel)
 dataloader = accelerator.prepare(dataloader)
 
