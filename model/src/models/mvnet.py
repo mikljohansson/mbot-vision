@@ -478,19 +478,13 @@ class DetectionHead(nn.Module):
         self.conv2 = DilatedGaussianFilter(3, 2)
         self.conv3 = DilatedGaussianFilter(3, 3)
 
-        self.maxpool = nn.AdaptiveMaxPool2d(1)
-
     def forward(self, x):
         # Max probability at any location
         x = self.act(x)
-        mp = self.maxpool(x)
 
         # Detect the center-of-mass of objects using gaussian kernels
-        x = self.conv1(x) + self.conv2(x) + self.conv3(x)
-        cp = self.maxpool(x)
-
-        # Rescale the detection map to the same scale as the max detection probability
-        x = x / (cp + 0.0001) * mp
+        y = self.conv1(x) + self.conv2(x) + self.conv3(x)
+        x = x * 0.8 + y * (0.2 / float(sum(self.conv1.conv.weight.data.reshape(-1)) * 3))
 
         # Avoid small overflows outside the range of [0, 1]
         return x.clamp(0., 1.)
@@ -545,16 +539,7 @@ class MVNetModel(nn.Module):
 
         self.head = nn.Identity()
 
-        #self.mean2x = torch.nn.Parameter(2. * torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1), requires_grad=False)
-        #self.std = torch.nn.Parameter(torch.tensor([0.229, 0.224, 0.225]).reshape(-1, 1, 1), requires_grad=False)
-
     def forward(self, x):
-        # Normalize image values and convert to [-1, 1] range inside the network, to simplify deployment
-        #image = (image - self.mean) / self.std
-        #image = (image - 0.5) / 0.5
-        # https://www.wolframalpha.com/input?i=simplify+%28%28x+-+m%29+%2F+s+-+0.5%29+%2F+0.5
-        #x = (2. * x - self.mean2x) / self.std - 1.
-
         x = self.stem(x)
         x = self.backbone(x)
         x = self.head(x)
