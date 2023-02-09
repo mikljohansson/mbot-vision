@@ -1,13 +1,9 @@
-from typing import Optional, Iterable
-
 import numpy as np
 import torch
+
 from scipy import signal
 from torch import nn
-import torch.nn.functional as F
 from einops import einsum
-
-from src.models.gdunet_attention import AttentionBlock
 
 
 class ResidualBlock(nn.Sequential):
@@ -140,20 +136,37 @@ class ChannelShuffle(nn.Module):
         return x
 
 
+class MeanMax(nn.Module):
+    def forward(self, x):
+        return torch.cat([
+            torch.mean(x, dim=1, keepdim=True),
+            torch.max(x, dim=1, keepdim=True)[0]], 1)
+
+
+class ExpandChannels(nn.Module):
+    def __init__(self, out_ch):
+        super().__init__()
+        self.out_ch = out_ch
+
+    def forward(self, x):
+        return x.expand(-1, self.out_ch, -1, -1)
+
+
 class BiasedSqueezeAndExcitation(nn.Module):
     """
     Channel attention Squeeze-and-Excitation block modified with inverted bottleneck and bias term
     """
-    def __init__(self, in_ch, expansion_ratio=4.):
+    def __init__(self, in_ch, out_ch=None, expansion_ratio=4.):
         super().__init__()
+        out_ch = out_ch if out_ch else in_ch
         mid_ch = max(int(in_ch * expansion_ratio), 4)
 
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.maxpool = nn.AdaptiveMaxPool2d(1)
         self.conv_map = nn.Conv2d(in_ch * 2, mid_ch, kernel_size=1)
         self.mid_act = nn.ReLU()
-        self.conv_bias = nn.Conv2d(mid_ch, in_ch, kernel_size=1)
-        self.conv_mul = nn.Conv2d(mid_ch, in_ch, kernel_size=1)
+        self.conv_bias = nn.Conv2d(mid_ch, out_ch, kernel_size=1)
+        self.conv_mul = nn.Conv2d(mid_ch, out_ch, kernel_size=1)
         self.act_mul = nn.Sigmoid()
 
     def factors(self, x):
@@ -187,10 +200,9 @@ class ChannelAndSpatialAttention(nn.Module):
         super().__init__()
         self.in_ch = in_ch
         self.sqe1 = BiasedSqueezeAndExcitation(in_ch)
-        self.sqe2 = BiasedSqueezeAndExcitation(in_ch)
-        self.sqe3 = BiasedSqueezeAndExcitation(in_ch)
+        self.meanmax = MeanMax()
 
-        self.conv_mul = nn.Sequential(
+        self.conv = nn.Sequential(
             #nn.Conv2d(2, heads, kernel_size, padding=(kernel_size // 2), bias=False),
             nn.Conv2d(2, heads, kernel_size=(1, kernel_size), stride=1,
                       padding=(0, (kernel_size * dilation - dilation) // 2),
@@ -198,52 +210,51 @@ class ChannelAndSpatialAttention(nn.Module):
             nn.Conv2d(heads, heads, kernel_size=(kernel_size, 1), stride=1,
                       padding=((kernel_size * dilation - dilation) // 2, 0),
                       dilation=dilation, groups=heads, bias=False),
-            Sum(dim=1, keepdim=True)
+            nn.Conv2d(heads, heads, kernel_size=1),
+            BiasedSqueezeAndExcitation(heads),
+            nn.ReLU(),
         )
 
-        self.conv_bias = nn.Sequential(
-            #nn.Conv2d(2, heads, kernel_size, padding=(kernel_size // 2)),
-            nn.Conv2d(2, heads, kernel_size=(1, kernel_size), stride=1,
-                      padding=(0, (kernel_size * dilation - dilation) // 2),
-                      dilation=dilation),
-            nn.Conv2d(heads, heads, kernel_size=(kernel_size, 1), stride=1,
-                      padding=((kernel_size * dilation - dilation) // 2, 0),
-                      dilation=dilation, groups=heads),
-            Sum(dim=1, keepdim=True)
+        self.mul_term = nn.Sequential(
+            nn.Conv2d(heads, 1, kernel_size=1),
+            # Expand spatial attention map back to in_ch
+            ExpandChannels(in_ch),
+            # Moderate which channels get the spatial attention applied
+            BiasedSqueezeAndExcitation(in_ch),
+            nn.Sigmoid()
         )
 
-        self.act_mul = nn.Sigmoid()
+        self.bias_term = nn.Sequential(
+            nn.Conv2d(heads, 1, kernel_size=1),
+            # Expand spatial attention map back to in_ch
+            ExpandChannels(in_ch),
+            # Moderate which channels get the spatial attention applied
+            BiasedSqueezeAndExcitation(in_ch)
+        )
 
     def forward(self, x):
         # Moderate which input channels to pay spatial attention to
         y = self.sqe1(x)
 
-        # Reduce to mean and max channels, keeping the spatial xy dimension
-        xy = torch.cat([
-            torch.mean(y, dim=1, keepdim=True),
-            torch.max(y, dim=1, keepdim=True)[0]], 1)
+        # Reduce to mean and max channels, keeping the spatial dimension
+        y = self.meanmax(y)
 
         # Downsample to improve performance
-        #xy = F.avg_pool2d(xy, kernel_size=2, stride=2)
+        #y = F.avg_pool2d(y, kernel_size=2, stride=2)
 
         # Calculate multi-head spatial attention maps
-        xybias = self.conv_bias(xy)
-        xymul = self.act_mul(self.conv_mul(xy))
+        y = self.conv(y)
 
-        # Expand spatial attention map to in_ch
-        xybias = xybias.expand(-1, self.in_ch, -1, -1)
-        xymul = xymul.expand(-1, self.in_ch, -1, -1)
-
-        # Moderate which channels get the spatial attention applied
-        xybias = self.sqe2(xybias, x)
-        xymul = self.sqe3(xymul, x)
+        # Calculate mul and bias terms
+        ymul = self.mul_term(y)
+        ybias = self.bias_term(y)
 
         # Upsample again
         #xybias = F.interpolate(xybias, size=x.shape[-2:], mode='nearest')
         #xymul = F.interpolate(xymul, size=x.shape[-2:], mode='nearest')
 
         # Apply the spatial and channel attention
-        return x * xymul + xybias
+        return x * ymul + ybias
 
 
 class GlobalAttention(nn.Module):
@@ -384,13 +395,16 @@ class SpatialPyramidPool(nn.Module):
         self.pool1 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
         self.pool2 = nn.MaxPool2d(kernel_size=5, stride=1, padding=2)
         self.pool3 = nn.MaxPool2d(kernel_size=7, stride=1, padding=3)
+
         self.att1 = BiasedSqueezeAndExcitation(mid_ch * 4) if attention else nn.Identity()
         self.norm = nn.BatchNorm2d(mid_ch * 4)
-        #self.shuffle = ChannelShuffle(4)
-        #self.convmid = nn.Conv2d(mid_ch * 4, in_ch, kernel_size=1, groups=4)
-        self.shuffle = nn.Identity()
-        self.convmid = nn.Conv2d(mid_ch * 4, in_ch, kernel_size=1)
-        self.att2 = BiasedSqueezeAndExcitation(in_ch) if attention else nn.Identity()
+
+        self.shuffle = ChannelShuffle(4)
+        self.convmid = nn.Conv2d(mid_ch * 4, in_ch, kernel_size=1, groups=4)
+        #self.shuffle = nn.Identity()
+        #self.convmid = nn.Conv2d(mid_ch * 4, in_ch, kernel_size=1)
+
+        self.att2 = ChannelAndSpatialAttention(in_ch) if attention else nn.Identity()
         self.act = nn.ReLU()
         self.convout = nn.Conv2d(in_ch, in_ch, kernel_size=1)
 

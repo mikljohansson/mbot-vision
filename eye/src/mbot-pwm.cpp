@@ -2,10 +2,10 @@
 #include "detection/detector.h"
 #include "mbot-pwm.h"
 
-#define MV_PWM_FREQ    1000
+#define MV_PWM_FREQ    1024
 #define MV_PWM_BITS    13   // Resolution 8, 10, 12, 15
-#define MV_PWM_OFF     (1 << (MV_PWM_BITS - 8))
-#define MV_PWM_MIN     (1 << (MV_PWM_BITS - 6))
+#define MV_PWM_OFF     (1 << (MV_PWM_BITS - 5))
+#define MV_PWM_MIN     (1 << (MV_PWM_BITS - 3))
 #define MV_PWM_MAX     ((1 << MV_PWM_BITS) - MV_PWM_MIN)
 #define MV_PWM_RANGE   (MV_PWM_MAX - MV_PWM_MIN)
 
@@ -29,6 +29,7 @@ void MBotPWM::run() {
         
         if (blob.detected) {
             ledcWrite(MV_PWMX_CHAN, MV_PWM_MIN + (int)((float)MV_PWM_RANGE * blob.x));
+            ledcWrite(MV_PWMY_CHAN, MV_PWM_MIN + (int)((float)MV_PWM_RANGE * blob.y));
             //ledcWrite(MV_PWMY_CHAN, (1 << (MV_PWM_BITS - 1)) + (int)((float)hsv.h * (360.0f / 256.0f)));
         }
         else {

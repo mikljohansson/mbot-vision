@@ -1,30 +1,29 @@
 # MBot Vision
 
-Equip your [Makeblock mBot](https://www.makeblock.com/) with a cheap ESP32-CAM which uses machine learning 
-to locate objects you train it to. The included example will make the mBot see and chase after colored balls!
+Equip your [Makeblock mBot](https://www.makeblock.com/) with a cheap ESP32-CAM and use machine learning 
+to recognize objects you've train it to. The included example will make the mBot chase after colored balls!
 
-You can make it recognize other object types by recording some videos and retraining. The 
+You can make it recognize other types of objects by recording some videos and retraining. The 
 [model/](model/) folder contains a dataset creation and model training pipeline. You can record 
 your own videos and photos and drop them into the dataset folder to train on.
 
 The ESP32 communicates the object location to the mBot using a simple PWM encoding. This
-ensure it can be read from the kids-friendly Scratch / Blocks programming IDE. For example 
-the kids can code up that if the object is seen to the right, go forward and slightly to 
-the right, until the ultrasound sensor tells you it's close.
+ensures the object position can be read from the kids-friendly Scratch / Blocks programming IDE. 
 
-The ESP32 also includes a web-server which you can use to see the camera output, it can
-also show you the model inputs (low-res images) and outputs (object heatmaps).
+The ESP32 also includes a web-server with a camera live stream, so you can use to see what
+the robot sees when you drive it around. The live stream can also show you the model 
+inputs (low-res images) and outputs (object heatmaps).
 
 # Programming the ESP32
 
 ## Inference engines
 
-This project uses a [ESP32 specific flavor](https://github.com/espressif/tflite-micro-esp-examples) 
+This project uses an [ESP32 specific flavor](https://github.com/espressif/tflite-micro-esp-examples) 
 of [TensorFlow Lite for Microcontrollers](https://github.com/tensorflow/tflite-micro) as the default 
 inference engine. 
 
-There's also experimental support for [TinyMaix](https://github.com/sipeed/TinyMaix) but this inference 
-engine doesn't support so many of the TFLite operators so you'll need to really strip down the 
+There's also experimental support for [TinyMaix](https://github.com/sipeed/TinyMaix), but this 
+inference engine doesn't support so many of the TFLite operators so you'll need to really strip down the 
 model to be able to run it.
 
 ## Setup tflite-micro
@@ -66,25 +65,39 @@ See [wiring.h](eye/include/wiring.h) for how to wire up the ESP32 with the mBot
 * `MV_PWMX_PIN` and `MV_PWMY_PIN` encodes the object X and Y positions using PWM 
   signals. These signals can be read using the joystick input block on the mBot.
 
+   * The x and y location of the object will be encoded as PWM signals with a frequency in the 
+     range of `[min=128Hz, max=1024Hz]`. The frequency corresponds to the location of the object 
+     in the camera frame. You can measure the exact output values that the robot gives using the 
+     Joystick sensor block in Scratch or use the `pulseIn` function in Arduino. 
+
+   * A PWM value of `min` indicates the object is to the left-most (x-dimension) or 
+     bottom-most (y-dimension) position, and `max` indicates the object is to the right or 
+     top respectively.
+
+   * If no object it detected it will output a signal of `32Hz` on both x and y channels.
+
+See [mbot-pwm.cpp](eye/src/mbot-pwm.cpp) for details.
+
 ## Optional wiring
 
 * `MV_SDA_PIN` and `MV_SCL_PIN` can be used to connect a cheap SSD1306 0.96" OLED display that 
-  supports the I2C protocol, for example something [like this](https://randomnerdtutorials.com/guide-for-oled-display-with-arduino/).
-  The display will show the ESP32's IP address and some other information, perhaps in the future
-  it can show the object detection output too.
+  supports the I2C protocol, for example something [like this](https://randomnerdtutorials.com/guide-for-oled-display-with-arduino/). The display will show the ESP32's IP address and some 
+  other information, perhaps in the future it can show the object detection output too.
 
-* `MV_FLASH_PIN` will output a PWM signal to control some flood lights from the web UI, for example some 
-  high power LED's connected with a transistor and some suitably sized resistors.
+* `MV_FLASH_PIN` will output a PWM signal to control some flood lights from the web UI, for example
+  some high power LED's connected with a transistor and some suitably sized resistors.
 
-* You can use the `LOG_TO_SDCARD` configure the code to log to an SDcard. Since the SDcard pins are shared, 
-  it means that in this case you must also disconnect all other wires like the floodlights and mBot connection.
+* You can use the `LOG_TO_SDCARD` configure the code to log to an SDcard. Since the SDcard pins are
+  shared, it means that in this case you must also disconnect all other wires like the 
+  floodlights and mBot connection.
 
 ## FDTI programmer
 
-The ESP32-CAM unfortunately doesn't have a RST pin, so in order to get the programmer to automatically put the 
-it into programming/flashing mode you need to solder a wire onto the inner connector of the RST button 
-and connect that to the RTS pin on the FTDI programmer. Doing this will allow you to upload new firmware
-without having to manually hold down the I00 and press the RST button.
+The ESP32-CAM unfortunately doesn't have a RST pin, so in order to get the programmer to 
+automatically put the it into programming/flashing mode you need to solder a wire onto the 
+inner connector of the RST button and connect that to the RTS pin on the FTDI programmer. 
+Doing this will allow you to upload new firmware without having to manually hold down the 
+I00 button or press the RST button.
 
 |Programmer|ESP32 CAM|
 |----------|---------|
@@ -97,12 +110,10 @@ without having to manually hold down the I00 and press the RST button.
 
 # Machine learning model
 
-There's code for a few different models available in [src/models](model/src/models) and which one to use can be 
-configured in the [Makefile](model/Makefile). If you switch models you may also need to adjust the input and output 
-dimensions in the Makefile. The model hyperparameters are configured in [src/configs](model/src/configs).
-
-You should probably start with the default model and see if you can get that working before you start
-changing models and building your own ;)
+There's code for a few different models available in [src/models](model/src/models) and which one 
+to use can be configured in the [Makefile](model/Makefile). If you switch models you may also need 
+to adjust the input and output dimensions in the Makefile. The model hyperparameters are configured
+in [src/configs](model/src/configs).
 
 ## Setup
 
@@ -113,7 +124,7 @@ cd mbot-vision/model
 python3 -m venv venv
 . venv/bin/activate
 
-pip install torch==1.11.0 torchvision --extra-index-url https://download.pytorch.org/whl/cu113
+pip install torch==1.13.1 torchvision --extra-index-url https://download.pytorch.org/whl/cu117
 pip install -r https://raw.githubusercontent.com/ultralytics/yolov5/master/requirements.txt
 pip install nvidia-pyindex
 pip install -r requirements.txt
@@ -135,25 +146,26 @@ EXPERIMENT=experiments/master/20220708-100725 make summary-tflite
 
 The dataset generation pipeline can use two sources of data
 
-* Your own recorded videos and images. These will be automatically labeled using a YOLO model, to produce segmentation 
-  maps which used as training data.
+* Your own recorded videos and images. These will be automatically annotated using a YOLO model, 
+  to produce segmentation maps which is then used as training data.
 
-* MS COCO pre-annotated images, which will be automatically downloaded when needed
+* MS COCO pre-annotated images, which will be automatically downloaded as needed
 
 ### Configuring what types of object to detect
 
-See the comma separated lists of COCO classes in the [Makefile](model/Makefile) in the `PRIMARY_CLASSES` and 
-`SECONDARY_CLASSES` variables. Here's the [full list](model/src/coco-labels-2014_2017.txt) of available classes.
+See the comma separated lists of COCO classes in the [Makefile](model/Makefile) in the
+`PRIMARY_CLASSES` and `SECONDARY_CLASSES` variables. Here's the 
+[full list](model/src/coco-labels-2014_2017.txt) of available classes.
 
-Edit `PRIMARY_CLASSES` to include the classes you're interested in detecting. Edit `SECONDARY_CLASSES` to include 
-any classes that are often confused with the primary classes. For example apples and oranges can easily be 
-confused for sports balls :)
+Change `PRIMARY_CLASSES` to include the classes you're interested in detecting, and 
+change `SECONDARY_CLASSES` to include any classes that are often confused with the primary 
+classes. For example apples and oranges can easily be confused for sports balls :)
 
 ### Building the dataset
 
-Put your own recorded videos into `dataset/recorded/videos` and images into `dataset/recorded/images`. You 
-can for example record some videos of the objects you want to detect, 10-20 minutes of video should be 
-enough to get going with.
+Put your own recorded videos into `dataset/recorded/videos` and images into 
+`dataset/recorded/images`. You can for example record some videos of the objects you 
+want to detect, 10-20 minutes of video should be enough to get going with.
 
 Run `make dataset` to create the training dataset. This will:
 
@@ -164,8 +176,8 @@ Run `make dataset` to create the training dataset. This will:
 
 ## Training
 
-Use `make tensorboard` to start a TensorBoard instance in the background, this can be used to monitor the 
-model training runs.
+Use `make tensorboard` to start a TensorBoard instance in the background, this can be used 
+to monitor the training runs and plot the loss.
 
 Run `make train` to train and package the model. This will:
 
@@ -185,7 +197,7 @@ EXPERIMENT=experiments/master/20220708-100725 make validate
 ```
 
 This will output input and output images into `experiments/master/20220708-100725/validation/` which
-shows the model input and output from PyTorch and quantized TFlite models so you can see how they
+shows the model input and output from PyTorch and quantized TFlite models, so you can see how they
 perform on your data.
 
 ## Command line examples

@@ -1,9 +1,9 @@
-torch==1.11.0
+torch==1.13.1
 accelerate
 pynvml
 tqdm
 onnx
-tensorflow
+tensorflow==2.11.0
 fiftyone
 pycocotools
 torchinfo

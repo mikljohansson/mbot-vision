@@ -43,7 +43,7 @@ COCO_MAX_SAMPLE_COUNT ?= 25000
 
 # Hyperparams for the fine-tuning on recorded data
 # - 3k optimization steps seems to be fine for this little model
-REC_EPOCHS ?= 250
+REC_EPOCHS ?= 1
 REC_BATCH_SIZE ?= 64
 REC_ACCUMULATION_STEPS ?= 1
 REC_LEARNING_RATE ?= 5e-5
@@ -99,10 +99,11 @@ $(EXPERIMENT)/coco.pth:
 		--learning-rate $(COCO_LEARNING_RATE) --accumulation-steps $(COCO_ACCUMULATION_STEPS)
 #--unknown-mask
 
-$(EXPERIMENT)/recorded.pth: $(COCO_MODEL_PATH)
+$(EXPERIMENT)/recorded.pth:# $(COCO_MODEL_PATH)
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) --gradient_accumulation_steps $(REC_ACCUMULATION_STEPS) \
 		src/train.py -m $(MODEL) -p $(PARALLEL) -t dataset/recorded/train -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE) \
-		--learning-rate $(REC_LEARNING_RATE) --accumulation-steps $(REC_ACCUMULATION_STEPS) --resume $<
+		--learning-rate $(REC_LEARNING_RATE) --accumulation-steps $(REC_ACCUMULATION_STEPS)
+		#--resume $<
 #--unknown-mask
 
 $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth

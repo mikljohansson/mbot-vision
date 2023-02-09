@@ -84,7 +84,7 @@ if args.channels_last:
         input_output_quant_dtype="int8"
     )
 
-    shutil.copyfile(tf_model_path + '/model_full_integer_quant.tflite', tflite_model_path)
+    shutil.copyfile(tf_model_path + '/' + os.path.splitext(os.path.basename(args.model))[0] + '_full_integer_quant.tflite', tflite_model_path)
 else:
     # Convert to TF
     tf_model_path = os.path.splitext(args.model)[0] + '.tf'
