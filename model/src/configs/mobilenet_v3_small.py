@@ -1,14 +1,18 @@
 from torchvision.models import mobilenet_v3_small
 
-from src.models.mobilenet import MobileNetModel
+from src.models.mobilenet_v3 import MobileNetSegmentV3
+
+backbone = mobilenet_v3_small(pretrained=True)
+
+# Remove the last few layers that drop down to too low resolution
+del backbone.features[-4:-1]
 
 model = dict(
-    type=MobileNetModel,
-    backbone=mobilenet_v3_small(pretrained=True),
-    backbone_out_ch=96,
-    pretrained=True,
-    input_size=(160, 120),  # WxH
-    output_size=(20, 16),   # WxH
+    type=MobileNetSegmentV3,
+    backbone=backbone,
+    backbone_out_ch=48,
+    input_size=(80, 48),  # WxH
+    output_size=(20, 12),   # WxH
 )
 
 solver = dict(

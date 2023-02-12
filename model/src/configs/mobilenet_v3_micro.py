@@ -4,7 +4,7 @@ from functools import partial
 from torch.hub import load_state_dict_from_url
 from torchvision.models.mobilenetv3 import InvertedResidualConfig, MobileNetV3, model_urls
 
-from src.models.mobilenet import MobileNetModel
+from src.models.mobilenet_v3 import MobileNetSegmentV3
 
 # See https://github.com/pytorch/vision/blob/main/torchvision/models/mobilenetv3.py#L239
 def _mobilenet_v3_micro_conf(width_mult: float = 1.0, reduced_tail: bool = False, dilated: bool = False):
@@ -15,14 +15,17 @@ def _mobilenet_v3_micro_conf(width_mult: float = 1.0, reduced_tail: bool = False
     adjust_channels = partial(InvertedResidualConfig.adjust_channels, width_mult=width_mult)
 
     inverted_residual_setting = [
-        bneck_conf(8, 3, 8, 8, True, "RE", 2, 1),  # C1
-        bneck_conf(8, 3, 8, 8, False, "RE", 2, 1),  # C2
-        bneck_conf(8, 3, 16, 16, False, "RE", 2, 1),  # C3
-        bneck_conf(16, 3, 32, 16, True, "RE", 1, 1),
-        bneck_conf(16, 3, 32, 16, True, "RE", 1, 1),
-        bneck_conf(16, 3, 32, 32 // reduce_divider, True, "RE", 2, dilation),  # C4
-        bneck_conf(32 // reduce_divider, 3, 64 // reduce_divider, 32 // reduce_divider, True, "RE", 1, dilation),
-        bneck_conf(32 // reduce_divider, 3, 64 // reduce_divider, 32 // reduce_divider, True, "RE", 1, dilation),
+        bneck_conf(4, 3, 8, 8, True, "RE", 2, 1),  # C1
+        bneck_conf(8, 3, 16, 8, False, "RE", 1, 1),
+        bneck_conf(8, 3, 24, 16, False, "RE", 2, 1),  # C2
+        bneck_conf(16, 3, 24, 16, True, "RE", 1, 1),  # C3
+        bneck_conf(16, 3, 64, 16, True, "RE", 1, 1),
+        bneck_conf(16, 3, 64, 16, True, "RE", 1, 1),
+        bneck_conf(16, 3, 48, 24, True, "RE", 1, 1),
+        bneck_conf(24, 3, 48, 24, True, "RE", 1, 1),
+        bneck_conf(24, 3, 96, 32 // reduce_divider, True, "RE", 2, dilation),  # C4
+        bneck_conf(32 // reduce_divider, 3, 160 // reduce_divider, 32 // reduce_divider, True, "RE", 1, dilation),
+        bneck_conf(32 // reduce_divider, 3, 160 // reduce_divider, 32 // reduce_divider, True, "RE", 1, dilation),
     ]
     last_channel = adjust_channels(32 // reduce_divider)  # C5
 
@@ -53,12 +56,11 @@ inverted_residual_setting, last_channel = _mobilenet_v3_micro_conf()
 backbone = _mobilenet_v3_micro("mobilenet_v3_small", inverted_residual_setting, last_channel)
 
 model = dict(
-    type=MobileNetModel,
+    type=MobileNetSegmentV3,
     backbone=backbone,
     backbone_out_ch=last_channel,
-    pretrained=True,
-    input_size=(160, 120),  # WxH
-    output_size=(20, 16),   # WxH
+    input_size=(80, 48),  # WxH
+    output_size=(20, 12),   # WxH
 )
 
 solver = dict(

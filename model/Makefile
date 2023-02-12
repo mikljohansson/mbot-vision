@@ -8,9 +8,22 @@ INFERENCE_ENGINE ?= TFMICRO
 #INFERENCE_ENGINE ?= TINYMAIX
 INFERENCE_EXTENSION = $(shell echo $(INFERENCE_ENGINE) | sed "s/TINYMAIX/tmdl/" | sed "s/TFMICRO.*/tflite/")
 
-#MODEL ?= mobilenet_v3_small
+# Pretrained FD-MobileNet v1 with depth_multiplier=0.25
+# https://github.com/osmr/imgclsmob/tree/master/pytorch (lots of other pretrained models available here too)
+MODEL ?= fdmobilenet_025
+
+# Pretrained MobileNet v1 with depth_multiplier=0.25
+# https://github.com/osmr/imgclsmob/tree/master/pytorch (lots of other pretrained models available here too)
+#MODEL ?= mobilenet_v1_025
+
+# Slimmed down MobileNet v3 (not pretrained)
 #MODEL ?= mobilenet_v3_micro
-MODEL ?= mvnet_micro
+
+# Pretrained MobileNet v3 small
+#MODEL ?= mobilenet_v3_small
+
+# Custom models (not pretrained)
+#MODEL ?= mvnet_micro
 #MODEL ?= tmnet_micro
 #MODEL ?= yolov6p
 
@@ -43,7 +56,7 @@ COCO_MAX_SAMPLE_COUNT ?= 25000
 
 # Hyperparams for the fine-tuning on recorded data
 # - 3k optimization steps seems to be fine for this little model
-REC_EPOCHS ?= 1
+REC_EPOCHS ?= 200
 REC_BATCH_SIZE ?= 64
 REC_ACCUMULATION_STEPS ?= 1
 REC_LEARNING_RATE ?= 5e-5

@@ -15,6 +15,7 @@ tflite
 scipy
 yolov5
 einops
+pytorchcv
 
 onnx-graphsurgeon
 onnxruntime
