@@ -3,8 +3,8 @@ from src.models.yolov6 import YOLOv6Model
 model = dict(
     type=YOLOv6Model,
     pretrained=None,
-    input_size=(160, 120),  # WxH
-    output_size=(80, 60),   # WxH
+    input_size=(80, 48),  # WxH
+    output_size=(20, 12),   # WxH
     depth_multiple=0.33,
     width_multiple=0.25,
     backbone=dict(

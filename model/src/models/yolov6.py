@@ -4,6 +4,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+from src.models.detection import DetectionHead
 from src.yolov6.models.efficientrep import EfficientRep
 from src.yolov6.models.reppan import RepPANNeck
 from src.yolov6.utils.torch_utils import fuse_model, fuse_conv_and_bn, initialize_weights
@@ -30,22 +31,29 @@ class UpsampleInterpolate2d(nn.Module):
         return F.interpolate(x, scale_factor=2, mode='nearest')
 
 
+class DownsampleInterpolate2d(nn.Module):
+    def __init__(self):
+        super(DownsampleInterpolate2d, self).__init__()
+
+    def forward(self, x):
+        return F.interpolate(x, scale_factor=0.5, mode='nearest')
+
+
 class SegmentationHead(nn.Module):
     def __init__(self):
         super().__init__()
 
         self.in1 = nn.Sequential(
+            DownsampleInterpolate2d(),
             nn.GroupNorm(8, 16),
         )
 
         self.in2 = nn.Sequential(
-            UpsampleInterpolate2d(),
             nn.Conv2d(32, 16, kernel_size=3, padding=1, bias=False),
             nn.GroupNorm(8, 16),
         )
 
         self.in3 = nn.Sequential(
-            UpsampleInterpolate2d(),
             nn.Conv2d(64, 32, kernel_size=3, padding=1, bias=False),
             nn.GroupNorm(8, 32),
             UpsampleInterpolate2d(),
@@ -108,18 +116,9 @@ class YOLOv6Model(nn.Module):
         self.head = SegmentationHead()
         self.out = nn.Identity()
 
-        self.mean2x = torch.nn.Parameter(2. * torch.tensor([0.485, 0.456, 0.406]).reshape(-1, 1, 1), requires_grad=False)
-        self.std = torch.nn.Parameter(torch.tensor([0.229, 0.224, 0.225]).reshape(-1, 1, 1), requires_grad=False)
-
         initialize_weights(self)
 
     def forward(self, x):
-        # Normalize image values and convert to [-1, 1] range inside the network, to simplify deployment
-        #image = (image - self.mean) / self.std
-        #image = (image - 0.5) / 0.5
-        # https://www.wolframalpha.com/input?i=simplify+%28%28x+-+m%29+%2F+s+-+0.5%29+%2F+0.5
-        x = (2. * x - self.mean2x) / self.std - 1.
-
         x = self.backbone(x)
         x = self.neck(x)
         x = self.head(x)
@@ -127,6 +126,9 @@ class YOLOv6Model(nn.Module):
         return x
 
     def deploy(self):
+        # Add the final detection head directly into the model
+        self.out = DetectionHead()
+
         # Fuse batchnorm layers
         fuse_model(self)
 
@@ -135,9 +137,6 @@ class YOLOv6Model(nn.Module):
             if hasattr(layer, 'switch_to_deploy'):
                 #print(f'Switching {type(layer)} to deployment configuration')
                 layer.switch_to_deploy()
-
-        # Add the final sigmoid directly into the model
-        self.out = nn.Sigmoid()
 
         # Perform activation inplace
         for m in self.modules():
