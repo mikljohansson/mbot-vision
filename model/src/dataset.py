@@ -42,7 +42,7 @@ class ImageDataset(Dataset):
             transforms.RandomAutocontrast(p=0.2),
             transforms.RandomApply(torch.nn.ModuleList([transforms.GaussianBlur(3)]), p=0.2),
             transforms.RandomApply(torch.nn.ModuleList([transforms.ColorJitter()]), p=0.2),
-            transforms.RandomGrayscale(p=0.2),
+            #transforms.RandomGrayscale(p=0.2),
         ) if apply_transforms else nn.Identity()
 
         self.gradient_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))

@@ -8,8 +8,10 @@ INFERENCE_ENGINE ?= TFMICRO
 #INFERENCE_ENGINE ?= TINYMAIX
 INFERENCE_EXTENSION = $(shell echo $(INFERENCE_ENGINE) | sed "s/TINYMAIX/tmdl/" | sed "s/TFMICRO.*/tflite/")
 
+# See this link for lots of pretrained models
+# https://github.com/osmr/imgclsmob/tree/master/pytorch
+
 # Pretrained FD-MobileNet v1 with depth_multiplier=0.25
-# https://github.com/osmr/imgclsmob/tree/master/pytorch (lots of other pretrained models available here too)
 MODEL ?= fdmobilenet_025
 
 # Pretrained MobileNet v1 with depth_multiplier=0.25
@@ -41,7 +43,7 @@ OUTPUT_HEIGHT = 12
 #MEMORY_FORMAT = CHANNELS_FIRST
 MEMORY_FORMAT = CHANNELS_LAST
 
-# Batch size used for YOLOv5 when annotating yur recorded data, you might need to lower this if your GPU runs out of memory
+# Batch size used for YOLOv5 when annotating your recorded data, you might need to lower this if your GPU runs out of memory
 YOLO_BATCH_SIZE ?= 32
 
 # Hyperparams for the pre-training on MS COCO images
@@ -56,10 +58,10 @@ COCO_MAX_SAMPLE_COUNT ?= 25000
 
 # Hyperparams for the fine-tuning on recorded data
 # - 3k optimization steps seems to be fine for this little model
-REC_EPOCHS ?= 200
+REC_EPOCHS ?= 100
 REC_BATCH_SIZE ?= 64
 REC_ACCUMULATION_STEPS ?= 1
-REC_LEARNING_RATE ?= 5e-5
+REC_LEARNING_RATE ?= 5e-4
 
 PARALLEL ?= $(shell grep -c ^processor /proc/cpuinfo)
 GPU_COUNT ?= $(shell if [ "${CUDA_VISIBLE_DEVICES}" != "" ]; then echo "${CUDA_VISIBLE_DEVICES}" | tr "," " "| wc -w; else nvidia-smi --query-gpu=name --format=csv,noheader | grep -v -e '^$$' | wc -l; fi)

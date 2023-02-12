@@ -271,7 +271,7 @@ void ObjectDetector::run() {
             }
 
             float probability = ((float)maxv + 127) / 255;
-            if (probability >= 0.6) {
+            if (probability >= 0.25) {
                 _detected = {
                     ((float)maxx + 0.5f) / MBOT_VISION_MODEL_OUTPUT_WIDTH, 
                     ((float)maxy + 0.5f) / MBOT_VISION_MODEL_OUTPUT_HEIGHT,
