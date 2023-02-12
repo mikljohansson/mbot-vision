@@ -3,6 +3,8 @@
 Equip your [Makeblock mBot](https://www.makeblock.com/) with a cheap ESP32-CAM and use machine learning 
 to recognize objects you've train it to. The included example will make the mBot chase after colored balls!
 
+![mBot vision](mbot.jpg)
+
 You can make it recognize other types of objects by recording some videos and retraining. The 
 [model/](model/) folder contains a dataset creation and model training pipeline. You can record 
 your own videos and photos and drop them into the dataset folder to train on.
