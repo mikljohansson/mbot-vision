@@ -26,9 +26,20 @@ class EventStream {
 
     private:
         void send(const void *data, size_t len) {
-            for (size_t written = 0; data && _client.connected() && written < len; ) {
+            long started = millis();
+            size_t written = 0;
+
+            while (data && _client.connected() && written < len) {
                 written += _client.write(((const uint8_t *)data) + written, len - written);
                 
+                /*if (millis() - started > 1000) {
+                    Serial.print("Event stream client timeout: ");
+                    Serial.println(_client.remoteIP());
+                    close(_client.fd());
+                    _client.stop();
+                    return;
+                }*/
+
                 // Prevents watchdog from triggering
                 delay(1);
             }
@@ -39,14 +50,13 @@ class EventStream {
         }
 
         void run() {
-            Serial.println("Starting event stream");
+            Serial.println("Starting object detection event stream");
             
             send("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n");
             _framerate.init();
 
             while (true) {
                 DetectedObject blob = _detector.wait();
-                
                 String data = "data: ";
                 blob.serialize(data);
                 data += "\r\n\r\n";
@@ -55,9 +65,12 @@ class EventStream {
                 _framerate.tick();
 
                 if (!_client.connected()) {
-                    Serial.println("HTTP event stream disconnected");
+                    Serial.println("Object detection event stream disconnected");
                     break;
                 }
+
+                // Let other tasks run too
+                backoff();
             }
         }
 

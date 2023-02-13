@@ -96,7 +96,7 @@ void ObjectDetector::begin() {
         return;
     }
     
-    xTaskCreatePinnedToCore(runStatic, "objectDetector", 10000, this, 1, &_task, 1);
+    xTaskCreatePinnedToCore(runStatic, "objectDetector", 10000, this, 2, &_task, 1);
 }
 
 DetectedObject ObjectDetector::wait() {
@@ -112,72 +112,75 @@ void ObjectDetector::run() {
     _framerate.init();
 
     Serial.println("Starting object detector");
+    FrameBufferItem fb;
 
     while (true) {
-        camera_fb_t *fb = fbqueue->take();
+        fb = fbqueue->take(fb);
 
-        if (fb) {
-            BenchmarkTimer frame, decompress;
+        BenchmarkTimer frame, decompress;
+        bool result = _decoder.decompress(fb.fb->buf, fb.fb->len);
+        decompress.stop();
 
-            bool result = _decoder.decompress(fb->buf, fb->len);
-            decompress.stop();
+        fbqueue->release(fb);
 
-            fbqueue->release(fb);
+        // Failed to decompress, probabily some bit error so wait a bit and retry
+        if (!result) {
+            backoff();
+            continue;
+        }
 
-            if (!result) {
-                continue;
-            }
+        uint8_t *pixels = _decoder.getOutputFrame();
+        size_t width = _decoder.getOutputWidth(), height = _decoder.getOutputHeight();
+        BenchmarkTimer inference;
 
-            uint8_t *pixels = _decoder.getOutputFrame();
-            size_t width = _decoder.getOutputWidth(), height = _decoder.getOutputHeight();
-            BenchmarkTimer inference;
+        // Copy frame to input tensor
+        cropAndQuantizeImage(pixels, width, height, _input);
 
-            // Copy frame to input tensor
-            cropAndQuantizeImage(pixels, width, height, _input);
+        // Run the model on this input and make sure it succeeds.
+        tm_mat_t outs = {3, MBOT_VISION_MODEL_OUTPUT_HEIGHT, MBOT_VISION_MODEL_OUTPUT_WIDTH, 1, {(mtype_t*)_output}};
+        tm_err_t res = tm_run(&mdl, _in, &outs);
 
-            // Run the model on this input and make sure it succeeds.
-            tm_mat_t outs = {3, MBOT_VISION_MODEL_OUTPUT_HEIGHT, MBOT_VISION_MODEL_OUTPUT_WIDTH, 1, {(mtype_t*)_output}};
-            tm_err_t res = tm_run(&mdl, _in, &outs);
+        if(res != TM_OK) {
+            serialPrint("tinymaix tm_run() failed with error code %d", res);
+        }
+        
+        inference.stop();
 
-            if(res != TM_OK) {
-                serialPrint("tinymaix tm_run() failed with error code %d", res);
-            }
-            
-            inference.stop();
+        // Process the inference results
+        int maxx = 0, maxy = 0;
+        int maxv = -256;
 
-            // Process the inference results
-            int maxx = 0, maxy = 0;
-            int maxv = -256;
+        for (int y = 0; y < MBOT_VISION_MODEL_OUTPUT_HEIGHT; y++) {
+            for (int x = 0; x < MBOT_VISION_MODEL_OUTPUT_WIDTH; x++) {
+                int val = _output[y * MBOT_VISION_MODEL_OUTPUT_WIDTH + x];
 
-            for (int y = 0; y < MBOT_VISION_MODEL_OUTPUT_HEIGHT; y++) {
-                for (int x = 0; x < MBOT_VISION_MODEL_OUTPUT_WIDTH; x++) {
-                    int val = _output[y * MBOT_VISION_MODEL_OUTPUT_WIDTH + x];
-
-                    if (val > maxv) {
-                        maxv = val;
-                        maxx = x;
-                        maxy = y;
-                    }
+                if (val > maxv) {
+                    maxv = val;
+                    maxx = x;
+                    maxy = y;
                 }
             }
-
-            if (_lastoutputbuf) {
-                memcpy(_lastoutputbuf, _output, MBOT_VISION_MODEL_OUTPUT_WIDTH * MBOT_VISION_MODEL_OUTPUT_HEIGHT);
-            }
-
-            float probability = ((float)maxv + 127) / 255;
-            if (probability >= 0.1) {
-                _detected = {(float)maxx / MBOT_VISION_MODEL_OUTPUT_WIDTH, (float)maxy / MBOT_VISION_MODEL_OUTPUT_HEIGHT, true};
-                serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f (decompress %dms, inference %dms, total %dms)\n", 
-                    _detected.x, _detected.y, probability, decompress.took(), inference.took(), frame.took());
-            }
-            else {
-                _detected = {0, 0, false};
-            }
-
-            xSemaphoreGive(_signal);
-            _framerate.tick();
         }
+
+        if (_lastoutputbuf) {
+            memcpy(_lastoutputbuf, _output, MBOT_VISION_MODEL_OUTPUT_WIDTH * MBOT_VISION_MODEL_OUTPUT_HEIGHT);
+        }
+
+        float probability = ((float)maxv + 127) / 255;
+        if (probability >= 0.5) {
+            _detected = {(float)maxx / MBOT_VISION_MODEL_OUTPUT_WIDTH, (float)maxy / MBOT_VISION_MODEL_OUTPUT_HEIGHT, true};
+            serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f (decompress %dms, inference %dms, total %dms)\n", 
+                _detected.x, _detected.y, probability, decompress.took(), inference.took(), frame.took());
+        }
+        else {
+            _detected = {0, 0, false};
+        }
+
+        xSemaphoreGive(_signal);
+        _framerate.tick();
+
+        // Let other tasks run too
+        delay(1);
     }
 }
 

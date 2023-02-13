@@ -22,12 +22,18 @@ class Camera {
 
 class FrameBufferItem {
     public:
-        camera_fb_t *fb;
+        camera_fb_t *frame;
         int readers;
+        uint64_t generation;
 
-        FrameBufferItem(camera_fb_t *fb) {
-            this->fb = fb;
-            this->readers = 0;
+        FrameBufferItem(camera_fb_t *fb, uint64_t generation)
+         : frame(fb), readers(0), generation(generation) {}
+
+        FrameBufferItem()
+         : FrameBufferItem(0, 0) {}
+
+        operator bool() const {
+            return frame;
         }
 };
 
@@ -36,15 +42,14 @@ class FrameBufferQueue {
         typedef std::vector<FrameBufferItem> Queue;
         Queue queue;
         SemaphoreHandle_t lock;
-        SemaphoreHandle_t signal;
 
     public:
         FrameBufferQueue();
         ~FrameBufferQueue();
 
-        void push(camera_fb_t *fb);
-        camera_fb_t *take();
-        void release(camera_fb_t *fb);
+        void push(FrameBufferItem fb);
+        FrameBufferItem take(FrameBufferItem last);
+        void release(FrameBufferItem fb);
 
     private:
         void expire();

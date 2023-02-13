@@ -14,7 +14,15 @@
 static const tflite::Model* model = nullptr;
 static tflite::MicroInterpreter* interpreter = nullptr;
 
-constexpr int kTensorArenaSize = 512 * 1024;
+// https://github.com/espressif/tflite-micro-esp-examples/blob/master/examples/person_detection/main/main_functions.cc#L53
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+constexpr int scratchBufSize = 39 * 1024;
+#else
+constexpr int scratchBufSize = 0;
+#endif
+// An area of memory to use for input, output, and intermediate arrays.
+constexpr int kTensorArenaSize = 81 * 1024 + scratchBufSize;
+//constexpr int kTensorArenaSize = 512 * 1024 + scratchBufSize;
 static uint8_t *tensor_arena;
 
 static TfLiteTensor *_input;
@@ -24,6 +32,40 @@ static const bool channels_last = true;
 #else
 static const bool channels_last = false;
 #endif
+
+#if defined(COLLECT_CPU_STATS)
+  long long total_time = 0;
+  long long start_time = 0;
+  extern long long softmax_total_time;
+  extern long long dc_total_time;
+  extern long long conv_total_time;
+  extern long long fc_total_time;
+  extern long long pooling_total_time;
+  extern long long add_total_time;
+  extern long long mul_total_time;
+#endif
+
+static void printModelStats() {
+#if defined(COLLECT_CPU_STATS)
+  //printf("Softmax time = %lld\n", softmax_total_time / 1000);
+  printf("FC time = %lld\n", fc_total_time / 1000);
+  printf("DC time = %lld\n", dc_total_time / 1000);
+  printf("conv time = %lld\n", conv_total_time / 1000);
+  printf("Pooling time = %lld\n", pooling_total_time / 1000);
+  printf("add time = %lld\n", add_total_time / 1000);
+  printf("mul time = %lld\n", mul_total_time / 1000);
+
+  /* Reset times */
+  total_time = 0;
+  //softmax_total_time = 0;
+  dc_total_time = 0;
+  conv_total_time = 0;
+  fc_total_time = 0;
+  pooling_total_time = 0;
+  add_total_time = 0;
+  mul_total_time = 0;
+#endif
+}
 
 static void cropAndQuantizeImage(const uint8_t *pixels, size_t image_width, size_t image_height, int8_t *target) {
     /*
@@ -75,6 +117,17 @@ static void cropAndQuantizeImage(const uint8_t *pixels, size_t image_width, size
 
 ObjectDetector::ObjectDetector()
  : _framerate("Object detector framerate: %02f\n"), _detected({0, 0, false}), _lastoutputbuf(0) {
+    // Allocate the tensor memory block on internal memory which is much smaller but a bit faster than external SPI RAM
+    // https://github.com/espressif/tflite-micro-esp-examples/blob/master/examples/person_detection/main/main_functions.cc#L70
+    tensor_arena = (uint8_t *)heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    
+    // Allocates on SPI RAM (slower but bigger memory)
+    //tensor_arena = new uint8_t[kTensorArenaSize];
+
+    if (!tensor_arena) {
+        serialPrint("Failed to allocate %d bytez for tfmicro tensor arena\n", kTensorArenaSize);
+    }
+
     _signal = xSemaphoreCreateBinary();
 }
 
@@ -83,16 +136,17 @@ ObjectDetector::~ObjectDetector() {
 }
 
 void ObjectDetector::begin() {
-    Serial.println("Initializing tflite");
-    tensor_arena = new uint8_t[kTensorArenaSize];
+    Serial.print("Initializing tflite");
+    Serial.printf(" on core %d, clock %d MHz", xPortGetCoreID(), getCpuFrequencyMhz());
 
-    if (!tensor_arena) {
-        serialPrint("Failed to allocate %d bytez for tfmicro tensor arena\n", kTensorArenaSize);
+    if (channels_last) {
+        Serial.println(" with a channels-last model (best inference speed)");
+    }
+    else {
+        Serial.println(" with a channels-first model (slower inference speed)");
     }
 
     try {
-        tflite::InitializeTarget();
-
         // Map the model into a usable data structure. This doesn't involve any
         // copying or parsing, it's a very lightweight operation.
         model = tflite::GetModel(mbot_vision_model);
@@ -146,8 +200,8 @@ void ObjectDetector::begin() {
 
         // Build an interpreter to run the model with.
         // NOLINTNEXTLINE(runtime-global-variables)
-        interpreter = new tflite::MicroInterpreter(
-            model, micro_op_resolver, tensor_arena, kTensorArenaSize);
+        static tflite::MicroInterpreter static_interpreter(model, micro_op_resolver, tensor_arena, kTensorArenaSize);
+        interpreter = &static_interpreter;
 
         // Allocate memory from the tensor_arena for the model's tensors.
         TfLiteStatus allocate_status = interpreter->AllocateTensors();
@@ -191,7 +245,7 @@ void ObjectDetector::begin() {
         return;
     }
 
-    xTaskCreatePinnedToCore(runStatic, "objectDetector", 10000, this, 1, &_task, 1);
+    xTaskCreatePinnedToCore(runStatic, "objectDetector", 10000, this, 2, &_task, 1);
     Serial.println("Tflite successfully initialized");
 }
 
@@ -208,84 +262,88 @@ void ObjectDetector::run() {
     _framerate.init();
 
     Serial.println("Starting object detector");
+    FrameBufferItem fb;
 
     while (true) {
-        camera_fb_t *fb = fbqueue->take();
+        fb = fbqueue->take(fb);
 
-        if (fb) {
-            BenchmarkTimer frame, decompress;
+        BenchmarkTimer frame, decompress;
+        bool result = _decoder.decompress(fb.frame->buf, fb.frame->len);
+        decompress.stop();
 
-            bool result = _decoder.decompress(fb->buf, fb->len);
-            decompress.stop();
+        fbqueue->release(fb);
 
-            fbqueue->release(fb);
-
-            if (!result) {
-                continue;
-            }
-
-            uint8_t *pixels = _decoder.getOutputFrame();
-            size_t width = _decoder.getOutputWidth(), height = _decoder.getOutputHeight();
-            BenchmarkTimer inference;
-
-            // Copy frame to input tensor
-            cropAndQuantizeImage(pixels, width, height, _input->data.int8);
-            TfLiteTensor* output;
-
-            try {
-                // Run the model on this input and make sure it succeeds.
-                if (kTfLiteOk != interpreter->Invoke()) {
-                    MicroPrintf( "Invoke failed.");
-                }
-                
-                output = interpreter->output(0);
-                inference.stop();
-            }
-            catch (std::exception &e) {
-                serialPrint("Caught tflite exception when executing model: %s\n", e.what());
-                return;
-            }
-            catch (...) {
-                serialPrint("Caught unknown tflite exception when executing model\n");
-                return;
-            }
-
-            // Process the inference results
-            int maxx = 0, maxy = 0;
-            int maxv = -256;
-
-            for (int y = 0; y < MBOT_VISION_MODEL_OUTPUT_HEIGHT; y++) {
-                for (int x = 0; x < MBOT_VISION_MODEL_OUTPUT_WIDTH; x++) {
-                    int val = output->data.int8[y * MBOT_VISION_MODEL_OUTPUT_WIDTH + x];
-
-                    if (val > maxv) {
-                        maxv = val;
-                        maxx = x;
-                        maxy = y;
-                    }
-                }
-            }
-
-            if (_lastoutputbuf) {
-                memcpy(_lastoutputbuf, output->data.int8, MBOT_VISION_MODEL_OUTPUT_HEIGHT * MBOT_VISION_MODEL_OUTPUT_WIDTH);
-            }
-
-            float probability = ((float)maxv + 127) / 255;
-            if (probability >= 0.25) {
-                _detected = {
-                    ((float)maxx + 0.5f) / MBOT_VISION_MODEL_OUTPUT_WIDTH, 
-                    ((float)maxy + 0.5f) / MBOT_VISION_MODEL_OUTPUT_HEIGHT,
-                    true};
-                serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f (decompress %dms, inference %dms, total %dms)\n", 
-                    _detected.x, _detected.y, probability, decompress.took(), inference.took(), frame.took());
-            }
-            else {
-                _detected = {0, 0, false};
-            }
-
-            xSemaphoreGive(_signal);
-            _framerate.tick();
+        // Failed to decompress, probably some bit error so wait a bit and retry
+        if (!result) {
+            backoff();
+            continue;
         }
+
+        uint8_t *pixels = _decoder.getOutputFrame();
+        size_t width = _decoder.getOutputWidth(), height = _decoder.getOutputHeight();
+        BenchmarkTimer inference;
+
+        // Copy frame to input tensor
+        cropAndQuantizeImage(pixels, width, height, _input->data.int8);
+        TfLiteTensor* output;
+
+        try {
+            // Run the model on this input and make sure it succeeds.
+            if (kTfLiteOk != interpreter->Invoke()) {
+                MicroPrintf( "Invoke failed.");
+            }
+            
+            output = interpreter->output(0);
+            inference.stop();
+        }
+        catch (std::exception &e) {
+            serialPrint("Caught tflite exception when executing model: %s\n", e.what());
+            return;
+        }
+        catch (...) {
+            serialPrint("Caught unknown tflite exception when executing model\n");
+            return;
+        }
+
+        // Process the inference results
+        int maxx = 0, maxy = 0;
+        int maxv = -256;
+
+        for (int y = 0; y < MBOT_VISION_MODEL_OUTPUT_HEIGHT; y++) {
+            for (int x = 0; x < MBOT_VISION_MODEL_OUTPUT_WIDTH; x++) {
+                int val = output->data.int8[y * MBOT_VISION_MODEL_OUTPUT_WIDTH + x];
+
+                if (val > maxv) {
+                    maxv = val;
+                    maxx = x;
+                    maxy = y;
+                }
+            }
+        }
+
+        if (_lastoutputbuf) {
+            memcpy(_lastoutputbuf, output->data.int8, MBOT_VISION_MODEL_OUTPUT_HEIGHT * MBOT_VISION_MODEL_OUTPUT_WIDTH);
+        }
+
+        float probability = ((float)maxv + 127) / 255;
+        if (probability >= 0.5) {
+            _detected = {
+                ((float)maxx + 0.5f) / MBOT_VISION_MODEL_OUTPUT_WIDTH, 
+                ((float)maxy + 0.5f) / MBOT_VISION_MODEL_OUTPUT_HEIGHT,
+                true};
+            serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f (decompress %dms, inference %dms, total %dms)\n", 
+                _detected.x, _detected.y, probability, decompress.took(), inference.took(), frame.took());
+            printModelStats();
+        }
+        else {
+            _detected = {0, 0, false};
+        }
+
+        xSemaphoreGive(_signal);
+        _framerate.tick();
+    
+        // Let other tasks run too
+        delay(1);
     }
 }
 

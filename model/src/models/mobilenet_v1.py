@@ -14,16 +14,19 @@ class UpsampleInterpolate2d(nn.Module):
 
 class SegmentationNeck(nn.Sequential):
     def __init__(self, in_ch):
+        mid_first_ch = 32
+        mid_second_ch = mid_first_ch // 4
+
         super().__init__(
-            nn.Conv2d(in_ch, 32, kernel_size=1),
+            nn.Conv2d(in_ch, mid_first_ch, kernel_size=1),
 
             UpsampleInterpolate2d(),
-            nn.Conv2d(32, 32, kernel_size=3, padding=1, groups=16, bias=False),
-            nn.Conv2d(32, 8, kernel_size=1),
+            nn.Conv2d(mid_first_ch, mid_first_ch, kernel_size=3, padding=1, groups=mid_first_ch, bias=False),
+            nn.Conv2d(mid_first_ch, mid_second_ch, kernel_size=1),
 
             UpsampleInterpolate2d(),
-            nn.Conv2d(8, 8, kernel_size=3, padding=1, groups=8, bias=False),
-            nn.Conv2d(8, 1, kernel_size=1),
+            nn.Conv2d(mid_second_ch, mid_second_ch, kernel_size=3, padding=1, groups=mid_second_ch, bias=False),
+            nn.Conv2d(mid_second_ch, 1, kernel_size=1),
         )
 
 

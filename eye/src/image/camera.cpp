@@ -52,58 +52,68 @@ FrameBufferQueue::FrameBufferQueue() {
     // Create an unlocked mutex to manipulate the queue
     lock = xSemaphoreCreateMutex();
     xSemaphoreGive(lock);
-
-    // Create a semaphore to signal that items are available
-    signal = xSemaphoreCreateBinary();
 }
 
 FrameBufferQueue::~FrameBufferQueue() {
     vSemaphoreDelete(lock);
-    vSemaphoreDelete(signal);
 }
 
-void FrameBufferQueue::push(camera_fb_t *fb) {
-    if (xSemaphoreTake(lock, portTICK_PERIOD_MS * 100)) {
+void FrameBufferQueue::push(FrameBufferItem fb) {
+    // Add framebuffer into queue and signal consumers
+    if (xSemaphoreTake(lock, portMAX_DELAY)) {
         expire();
         queue.push_back(fb);
         xSemaphoreGive(lock);
-        xSemaphoreGive(signal);
     }
     else {
-        esp_camera_fb_return(fb);
+        // High lock-contention, so just release the frame back to the camera
+        esp_camera_fb_return(fb.frame);
+        backoff();
     }
 }
 
-camera_fb_t *FrameBufferQueue::take() {
-    camera_fb_t *result = 0;
+FrameBufferItem FrameBufferQueue::take(FrameBufferItem last) {
+    FrameBufferItem result;
+    
+    while (true) {
+        // Add a read-lock on the most recent framebuffer
+        if (xSemaphoreTake(lock, portMAX_DELAY)) {
+            if (!queue.empty()) {
+                FrameBufferItem &item = queue.at(queue.size() - 1);
+                
+                // Don't consume the same item again
+                if (item.generation > last.generation) {
+                    item.readers++;
+                    result = item;
+                }
+            }
 
-    if (xSemaphoreTake(signal, portTICK_PERIOD_MS * 1000) && xSemaphoreTake(lock, portMAX_DELAY)) {
-        if (!queue.empty()) {
-            FrameBufferItem &item = queue.at(queue.size() - 1);
-            result = item.fb;
-            item.readers++;
+            xSemaphoreGive(lock);
+            
+            if (result) {
+                break;
+            }
         }
 
-        xSemaphoreGive(lock);
-
-        if (result) {
-            // Signal other tasks too
-            xSemaphoreGive(signal);
-        }
+        // Throttle the consumer in waiting for a new buffer
+        backoff();
     }
 
     return result;
 }
 
-void FrameBufferQueue::release(camera_fb_t *fb) {
+void FrameBufferQueue::release(FrameBufferItem fb) {
     while (true) {
+        // Release the read-lock on the framebuffer
         if (xSemaphoreTake(lock, portMAX_DELAY)) {
             for (Queue::iterator it = queue.begin(); it != queue.end(); ++it) {
-                if (it->fb == fb) {
+                if (it->frame == fb.frame) {
                     it->readers--;
                     
-                    if (it->readers == 0) {
-                        esp_camera_fb_return(it->fb);
+                    // If this was the last reader and we have newer frames, then release the framebuffer back to 
+                    // the camera. Keeping at least 1 frame in the queue, otherwise thread starvation will occur
+                    if (it->readers == 0 && queue.size() > 1) {
+                        esp_camera_fb_return(it->frame);
                         queue.erase(it);
                     }
 
@@ -114,13 +124,16 @@ void FrameBufferQueue::release(camera_fb_t *fb) {
             xSemaphoreGive(lock);
             break;
         }
+
+        backoff();
     }
 }
 
 void FrameBufferQueue::expire() {
+    // Removes any framebuffers with 0 readers
     for (Queue::iterator it = queue.begin(); it != queue.end(); ) {
         if (it->readers == 0) {
-            esp_camera_fb_return(it->fb);
+            esp_camera_fb_return(it->frame);
             queue.erase(it);
         }
         else {
@@ -145,20 +158,28 @@ void Camera::run() {
 
     Serial.println("Camera successfully initialized");
     framerate.init();
+    uint64_t generation = 1;
 
     while (true) {
+        // Grab frame from the camera and push it into the queue
         camera_fb_t *fb = esp_camera_fb_get();
 
         if (fb) {
-            fbqueue->push(fb);
+            fbqueue->push(FrameBufferItem(fb, generation));
             framerate.tick();
+            generation++;
             
             if (mv_camera_aithinker_config.pixel_format == PIXFORMAT_JPEG) {
                 _logger.logJpeg(fb->buf, fb->len);
             }
-        }
 
-        yield();
+            // Let other tasks run too
+            delay(1);
+        }
+        else {
+            // Camera was out of framebuffers, so wait a bit longer
+            backoff();
+        }
     }
 }
 

@@ -78,7 +78,7 @@ void httpdServiceRequests(void *p) {
         // Service HTTP requests
         server.handleClient();
         
-        // Prevents watchdog from triggering
+        // Let other tasks run too
         delay(1);
     }
 
@@ -87,5 +87,5 @@ void httpdServiceRequests(void *p) {
 
 void httpdRun(Detector &d) {
     detector = &d;
-    xTaskCreatePinnedToCore(httpdServiceRequests, "httpd", 10000, NULL, 2, &httpdTask, 0);
+    xTaskCreatePinnedToCore(httpdServiceRequests, "httpd", 10000, NULL, 1, &httpdTask, 0);
 }

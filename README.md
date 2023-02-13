@@ -31,8 +31,8 @@ model to be able to run it.
 ## Setup tflite-micro
 
 You need to prepare the ESP32 specific tflite-micro distribution a bit in order to make it usable from PlatformIO
-and get the ESP32 optimized kernels. These kernels can make a 3x factor change in inference performance on the 
-ESP32, or even more on an ESP32-S3.
+and get the ESP32 optimized kernels. [These kernels](https://github.com/espressif/tflite-micro-esp-examples#esp-nn-integration) 
+can make a 3x factor change in inference performance on the ESP32, or even more on an ESP32-S3.
 
 ```
 git clone https://github.com/mikljohansson/mbot-vision.git
@@ -47,6 +47,9 @@ cd tflite-micro-esp-examples
 # If you're not targeting an new ESP32-S3 MCU then remove all the optimized kernels for that 
 # architecture since this will otherwise cause build problems in PlatformIO
 find components/esp-nn -name '*esp32s3*' -exec rm -f {} ';'
+
+# Remove all the default tfmicro kernels in favor of the ESP32 optimized kernels (otherwise they'll get used by the linker for some reason)
+for f in components/tflite-lib/tensorflow/lite/micro/kernels/esp_nn/*.cc; do rm components/tflite-lib/tensorflow/lite/micro/kernels/`basename $f`; done
 ```
 
 ## Program the microcontroller using PlatformIO
@@ -221,7 +224,7 @@ make train
 # Use specific GPU for training.
 CUDA_VISIBLE_DEVICES=1 make train
 
-# Train on CPU, this model is so small that it can feasibly be trained on CPU
+# Train on CPU, this model is so small that it can easily be trained on CPU
 CUDA_VISIBLE_DEVICES= make train
 
 # Run inference on a sample of images, the output ends up in experiments/something/date/validation

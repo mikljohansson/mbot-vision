@@ -365,7 +365,7 @@ class ConvNeXt(nn.Sequential):
     """
     ConvNeXt module with optional channel attention
     """
-    def __init__(self, in_ch, kernel_size=3, groups=1, expansion_ratio=4, attention=True):
+    def __init__(self, in_ch, kernel_size=3, groups=1, expansion_ratio=4, attention=False):
         mid_ch = int(in_ch * expansion_ratio)
 
         super().__init__(
@@ -385,7 +385,7 @@ class SpatialPyramidPool(nn.Module):
     """
     Mix of SPP and ConvNeXt with optional channel attention
     """
-    def __init__(self, in_ch, attention=True, channel_add=False):
+    def __init__(self, in_ch, attention=False, channel_add=False):
         super().__init__()
         self.channel_add = channel_add
         self.in_ch = in_ch
@@ -399,10 +399,10 @@ class SpatialPyramidPool(nn.Module):
         self.att1 = BiasedSqueezeAndExcitation(mid_ch * 4) if attention else nn.Identity()
         self.norm = nn.BatchNorm2d(mid_ch * 4)
 
-        self.shuffle = ChannelShuffle(4)
-        self.convmid = nn.Conv2d(mid_ch * 4, in_ch, kernel_size=1, groups=4)
-        #self.shuffle = nn.Identity()
-        #self.convmid = nn.Conv2d(mid_ch * 4, in_ch, kernel_size=1)
+        #self.shuffle = ChannelShuffle(4)
+        #self.convmid = nn.Conv2d(mid_ch * 4, in_ch, kernel_size=1, groups=4)
+        self.shuffle = nn.Identity()
+        self.convmid = nn.Conv2d(mid_ch * 4, in_ch, kernel_size=1)
 
         self.att2 = ChannelAndSpatialAttention(in_ch) if attention else nn.Identity()
         self.act = nn.ReLU()
@@ -437,7 +437,7 @@ class SSPF(nn.Module):
     """
     Spatial Pyramid Pool Fast from YOLOv5/v8 with optional channel attention
     """
-    def __init__(self, in_ch, out_ch, attention=True):
+    def __init__(self, in_ch, out_ch, attention=False):
         super().__init__()
         mid_ch = in_ch // 2
 
@@ -496,8 +496,7 @@ class MVNetModel(nn.Module):
                     UpsampleConv(16, 16, scale_factor=2)
                 ),
 
-                # Enabling attention on this module causes issues (with the REDUCE_MAX operator) for some mystery reason
-                ConvNeXt(16, expansion_ratio=2, groups=4, attention=False),
+                ConvNeXt(16, expansion_ratio=2, groups=4),
 
                 # 20x15
                 UpsampleConv(16, 8, scale_factor=2)

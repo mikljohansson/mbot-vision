@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "detection/detector.h"
 #include "mbot-pwm.h"
+#include "common.h"
 
 #define MV_PWM_FREQ    1024
 #define MV_PWM_BITS    13   // Resolution 8, 10, 12, 15
@@ -13,7 +14,7 @@ MBotPWM::MBotPWM(Detector &detector)
  : _detector(detector) {}
 
 void MBotPWM::begin() {
-    xTaskCreatePinnedToCore(runStatic, "mbot-pwm", 10000, this, 1, &_task, 0);
+    xTaskCreatePinnedToCore(runStatic, "mBotPWM", 10000, this, 3, &_task, 1);
 }
 
 void MBotPWM::run() {
@@ -37,7 +38,7 @@ void MBotPWM::run() {
             ledcWrite(MV_PWMY_CHAN, MV_PWM_OFF);
         }
  
-        delay(25);
+        delay(100);
     }
 }
 

@@ -65,7 +65,7 @@ size_t JpegDecoder::read(JDEC *jd, uint8_t *buff, size_t nbyte) {
     
     _inputoffset += nbyte;
 
-    yield();
+    //yield();
     return nbyte;
 }
 
@@ -91,7 +91,7 @@ int JpegDecoder::write(JDEC *jd, void *bitmap, JRECT *rect) {
         target += (_outputwidth - rect->right - 1 + rect->left) * JD_BPP;
     }
 
-    yield();
+    //yield();
     return 1;    /* Continue to decompress */
 }
 
