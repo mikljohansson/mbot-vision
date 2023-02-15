@@ -23,9 +23,10 @@ typedef struct _WifiNetwork {
 } WifiNetwork;
 
 static WifiNetwork wifiNetworks[] = {
-    {"krokodil", "mistress"},
-    {"dlink-BF60", "ptfmm78341"},
+    //{"krokodil", "mistress"},
+    //{"dlink-BF60", "ptfmm78341"},
     //{"mikl-samsung-g9", "password"},
+    {"mikl-p14s", "password"},  
 };
 
 static const char *hostname = "mbot";

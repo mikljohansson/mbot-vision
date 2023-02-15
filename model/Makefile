@@ -37,10 +37,10 @@ OUTPUT_WIDTH = 20
 OUTPUT_HEIGHT = 12
 
 # PyTorch uses channels-first but tflite uses channels-last. By default this will cause onnx_tf to put a lot of TRANSPOSE
-# operators into the graph, which makes the model at least 3x slower. Setting this to channels-last makes convert.py
-# try to convert the model to channels-last, to optimize performance. See https://github.com/PINTO0309/onnx2tf
-MEMORY_FORMAT = CHANNELS_FIRST
-#MEMORY_FORMAT = CHANNELS_LAST
+# operators into the graph, which makes the model slower. Setting this to channels-last makes convert.py try to convert
+# the model to channels-last. See https://github.com/PINTO0309/onnx2tf
+#MEMORY_FORMAT = CHANNELS_FIRST
+MEMORY_FORMAT = CHANNELS_LAST
 
 # Batch size used for YOLOv5 when annotating your recorded data, you might need to lower this if your GPU runs out of memory
 YOLO_BATCH_SIZE ?= 32
