@@ -23,10 +23,10 @@ typedef struct _WifiNetwork {
 } WifiNetwork;
 
 static WifiNetwork wifiNetworks[] = {
-    //{"krokodil", "mistress"},
-    //{"dlink-BF60", "ptfmm78341"},
+    {"krokodil", "mistress"},
+    {"dlink-BF60", "ptfmm78341"},
     //{"mikl-samsung-g9", "password"},
-    {"mikl-p14s", "password"},  
+    //{"mikl-p14s", "password"},  
 };
 
 static const char *hostname = "mbot";
@@ -105,11 +105,6 @@ void setup() {
     }
     oledPrint("Starting up");
 
-    // Connect to Mbot
-    if (!LOG_TO_SDCARD) {
-        mbot->begin();
-    }
-
     // Start the camera frame capture task. Start this before initializing the wifi and wait for the first 
     // frame to be captured, otherwise sporadic brownouts and wifi connections issues arise.
     camera->begin();
@@ -156,11 +151,13 @@ void setup() {
         Serial.print("Retrieving time: ");
         configTime(0, 0, "pool.ntp.org");
         time_t now = time(nullptr);
+
         while (now < 24 * 3600) {
             Serial.print(".");
             delay(100);
             now = time(nullptr);
         }
+
         Serial.println(now);
         setTime(time(nullptr));
     }
@@ -174,6 +171,11 @@ void setup() {
     // Start object detector
     detector->begin();
     detector->wait();
+
+    // Connect to Mbot
+    if (!LOG_TO_SDCARD) {
+        mbot->begin();
+    }
 
     // Start webserver
     httpdRun(*detector);

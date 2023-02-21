@@ -73,7 +73,7 @@ void FrameBufferQueue::push(FrameBufferItem fb) {
 }
 
 FrameBufferItem FrameBufferQueue::take(FrameBufferItem last) {
-    FrameBufferItem result;
+    FrameBufferItem result(0, last.generation);
     
     while (true) {
         // Add a read-lock on the most recent framebuffer
@@ -97,6 +97,27 @@ FrameBufferItem FrameBufferQueue::take(FrameBufferItem last) {
 
         // Throttle the consumer in waiting for a new buffer
         backoff();
+    }
+
+    return result;
+}
+
+FrameBufferItem FrameBufferQueue::poll(FrameBufferItem last) {
+    FrameBufferItem result(0, last.generation);
+    
+    // Add a read-lock on the most recent framebuffer
+    if (xSemaphoreTake(lock, portMAX_DELAY)) {
+        if (!queue.empty()) {
+            FrameBufferItem &item = queue.at(queue.size() - 1);
+            
+            // Don't consume the same item again
+            if (item.generation > last.generation) {
+                item.readers++;
+                result = item;
+            }
+        }
+
+        xSemaphoreGive(lock);
     }
 
     return result;
@@ -174,7 +195,7 @@ void Camera::run() {
             }
 
             // Let other tasks run too
-            delay(1);
+            delay(50);
         }
         else {
             // Camera was out of framebuffers, so wait a bit longer

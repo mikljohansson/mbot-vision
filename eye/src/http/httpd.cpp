@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include <WebServer.h>
+#include <ESPAsyncWebServer.h>
 #include "http/httpd.h"
 #include "image/camera.h"
 #include "framerate.h"
@@ -11,18 +11,18 @@
 #include "http/jpeg-stream.h"
 #include "http/event-stream.h"
 
-static WebServer server(80);
-static TaskHandle_t httpdTask;
+static AsyncWebServer server(80);
+static AsyncEventSource events("/events");
 static Detector *detector;
 
-void handleIndex() {
+void handleIndex(AsyncWebServerRequest *request) {
     Serial.print("Sending index.html to: ");
-    Serial.println(server.client().remoteIP());
-    server.send(200, "text/html", indexDocument);
+    Serial.println(request->client()->remoteIP());
+    request->send(200, "text/html", indexDocument);
 }
 
-void handleFlash() {
-    String value = server.arg(0);
+void handleFlash(AsyncWebServerRequest *request) {
+    String value = request->arg((size_t)0);
     int duty = value.toInt();
     duty = std::max(0, std::min(duty, MV_FLASH_MAX));
     
@@ -35,37 +35,42 @@ void handleFlash() {
         ledcWrite(MV_FLASH_CHAN, duty);
     }
 
-    server.send(200, "text/plain", "OK");
+    request->send(200, "text/plain", "OK");
 }
 
-void handleJpegStream() {
-    JpegStream *stream = new JpegStream(server.client(), false, *detector);
-    stream->start();
+void handleJpegStream(AsyncWebServerRequest *request) {
+    Serial.print("MJPEG stream connected: ");
+    Serial.println(request->client()->remoteIP());
+    request->send(new JpegStream(false, *detector));
 }
 
-void handleDetectorStream() {
-    JpegStream *stream = new JpegStream(server.client(), true, *detector);
-    stream->start();
+void handleDetectorStream(AsyncWebServerRequest *request) {
+    Serial.print("MJPEG model output stream connected: ");
+    Serial.println(request->client()->remoteIP());
+    request->send(new JpegStream(true, *detector));
 }
 
-void handleEventStream() {
-    EventStream *stream = new EventStream(server.client(), *detector);
-    stream->start();
+void handleEventStream(AsyncWebServerRequest *request) {
+    Serial.print("Event stream connected: ");
+    Serial.println(request->client()->remoteIP());
+    request->send(new EventStream(*detector));
 }
 
-void handleNotFound() {
+void handleNotFound(AsyncWebServerRequest *request) {
     String message = "Server is running!\n\n";
     message += "URI: ";
-    message += server.uri();
+    message += request->url();
     message += "\nMethod: ";
-    message += (server.method() == HTTP_GET) ? "GET" : "POST";
+    message += (request->method() == HTTP_GET) ? "GET" : "POST";
     message += "\nArguments: ";
-    message += server.args();
+    message += request->args();
     message += "\n";
-    server.send(200, "text/plain", message);
+    request->send(200, "text/plain", message);
 }
 
-void httpdServiceRequests(void *p) {
+void httpdRun(Detector &d) {
+    detector = &d;
+
     server.on("/", HTTP_GET, handleIndex);
     server.on("/flash", HTTP_POST, handleFlash);
     server.on("/stream", HTTP_GET, handleJpegStream);
@@ -73,19 +78,4 @@ void httpdServiceRequests(void *p) {
     server.on("/events", HTTP_GET, handleEventStream);
     server.onNotFound(handleNotFound);
     server.begin();
-
-    while (true) {
-        // Service HTTP requests
-        server.handleClient();
-        
-        // Let other tasks run too
-        delay(1);
-    }
-
-    vTaskDelete(NULL);
-}
-
-void httpdRun(Detector &d) {
-    detector = &d;
-    xTaskCreatePinnedToCore(httpdServiceRequests, "httpd", 10000, NULL, 1, &httpdTask, 0);
 }

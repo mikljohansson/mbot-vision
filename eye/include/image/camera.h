@@ -49,6 +49,7 @@ class FrameBufferQueue {
 
         void push(FrameBufferItem fb);
         FrameBufferItem take(FrameBufferItem last);
+        FrameBufferItem poll(FrameBufferItem last);
         void release(FrameBufferItem fb);
 
     private:

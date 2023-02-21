@@ -14,7 +14,7 @@ MBotPWM::MBotPWM(Detector &detector)
  : _detector(detector) {}
 
 void MBotPWM::begin() {
-    xTaskCreatePinnedToCore(runStatic, "mBotPWM", 10000, this, 3, &_task, 1);
+    xTaskCreatePinnedToCore(runStatic, "mBotPWM", 10000, this, 2, &_task, 1);
 }
 
 void MBotPWM::run() {
@@ -38,7 +38,7 @@ void MBotPWM::run() {
             ledcWrite(MV_PWMY_CHAN, MV_PWM_OFF);
         }
  
-        delay(100);
+        delay(50);
     }
 }
 

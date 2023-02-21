@@ -137,7 +137,6 @@ ObjectDetector::~ObjectDetector() {
 
 void ObjectDetector::begin() {
     Serial.print("Initializing tflite");
-    Serial.printf(" on core %d, clock %d MHz", xPortGetCoreID(), getCpuFrequencyMhz());
 
     if (channels_last) {
         Serial.println(" with a channels-last model (best inference speed)");
@@ -245,7 +244,7 @@ void ObjectDetector::begin() {
         return;
     }
 
-    xTaskCreatePinnedToCore(runStatic, "objectDetector", 10000, this, 2, &_task, 1);
+    xTaskCreatePinnedToCore(runStatic, "objectDetector", 10000, this, 1, &_task, 1);
     Serial.println("Tflite successfully initialized");
 }
 
@@ -259,9 +258,9 @@ DetectedObject ObjectDetector::get() {
 }
 
 void ObjectDetector::run() {
-    _framerate.init();
+    Serial.printf("Starting object detector on core %d, clock %d MHz\n", xPortGetCoreID(), getCpuFrequencyMhz());
 
-    Serial.println("Starting object detector");
+    _framerate.init();
     FrameBufferItem fb;
 
     while (true) {
@@ -273,7 +272,7 @@ void ObjectDetector::run() {
 
         fbqueue->release(fb);
 
-        // Failed to decompress, probably some bit error so wait a bit and retry
+        // Failed to decompress, probably some bad bits from the camera so wait a bit and retry
         if (!result) {
             backoff();
             continue;
@@ -331,9 +330,9 @@ void ObjectDetector::run() {
                 ((float)maxx + 0.5f) / MBOT_VISION_MODEL_OUTPUT_WIDTH, 
                 ((float)maxy + 0.5f) / MBOT_VISION_MODEL_OUTPUT_HEIGHT,
                 true};
-            serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f (decompress %dms, inference %dms, total %dms)\n", 
-                _detected.x, _detected.y, probability, decompress.took(), inference.took(), frame.took());
-            printModelStats();
+            //serialPrint("Object detected at coordinate %.02f x %.02f with probability %.02f (decompress %dms, inference %dms, total %dms)\n", 
+            //    _detected.x, _detected.y, probability, decompress.took(), inference.took(), frame.took());
+            //printModelStats();
         }
         else {
             _detected = {0, 0, false};

@@ -96,7 +96,7 @@ void ObjectDetector::begin() {
         return;
     }
     
-    xTaskCreatePinnedToCore(runStatic, "objectDetector", 10000, this, 2, &_task, 1);
+    xTaskCreatePinnedToCore(runStatic, "objectDetector", 10000, this, 1, &_task, 1);
 }
 
 DetectedObject ObjectDetector::wait() {
