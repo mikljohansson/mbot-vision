@@ -1,6 +1,7 @@
-#include "framerate.h"
+#include "mbot-vision/framerate.h"
+
 #include <Arduino.h>
-#include "common.h"
+#include "mbot-vision/common.h"
 
 Framerate::Framerate(const char *format)
  : _format(format) {}

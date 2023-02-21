@@ -1,8 +1,8 @@
-#ifndef _MV_MBOT_JOYSTICK_H_
-#define _MV_MBOT_JOYSTICK_H_
+#ifndef _MV_MBOT_PWM_H_
+#define _MV_MBOT_PWM_H_
 
 #include <Arduino.h>
-#include "wiring.h"
+#include "mbot-vision/wiring.h"
 
 class Detector;
 

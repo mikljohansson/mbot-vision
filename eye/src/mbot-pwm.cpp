@@ -1,7 +1,8 @@
+#include "mbot-vision/mbot-pwm.h"
+
 #include <Arduino.h>
-#include "detection/detector.h"
-#include "mbot-pwm.h"
-#include "common.h"
+#include "mbot-vision/detection/detector.h"
+#include "mbot-vision/common.h"
 
 #define MV_PWM_FREQ    1024
 #define MV_PWM_BITS    13   // Resolution 8, 10, 12, 15

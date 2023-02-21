@@ -1,21 +1,21 @@
+#include "mbot-vision/http/httpd.h"
+
 #include <Arduino.h>
 #include <esp_http_server.h>
-#include "http/httpd.h"
-#include "image/camera.h"
-#include "framerate.h"
-#include "detection/detector.h"
-#include "wiring.h"
-#include "common.h"
-
-#include "http/index.h"
-#include "http/jpeg-stream.h"
-#include "http/event-stream.h"
+#include "mbot-vision/image/camera.h"
+#include "mbot-vision/framerate.h"
+#include "mbot-vision/detection/detector.h"
+#include "mbot-vision/wiring.h"
+#include "mbot-vision/common.h"
+#include "mbot-vision/http/index.h"
+#include "mbot-vision/http/jpeg-stream.h"
+#include "mbot-vision/http/event-stream.h"
 
 static Detector *detector;
 
 esp_err_t handleIndex(httpd_req_t *req) {
     Serial.println("Sending index.html");
-    return httpd_resp_send(req, indexDocument.c_str(), HTTPD_RESP_USE_STRLEN);
+    return httpd_resp_sendstr(req, indexDocument.c_str());
 }
 
 httpd_uri_t uri_index = {
@@ -53,7 +53,7 @@ esp_err_t handleFlash(httpd_req_t *req) {
             }
 
             free(buf);
-            return httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+            return httpd_resp_sendstr(req, "OK");
         }
 
         free(buf);
@@ -72,10 +72,20 @@ httpd_uri_t uri_flash = {
 
 
 
+void runJpegStream(void *p) {
+    JpegStream *stream = (JpegStream *)p;
+    stream->run();
+    delete stream;
+    vTaskDelete(NULL);
+}
+
 esp_err_t handleJpegStream(httpd_req_t *req) {
     Serial.println("MJPEG stream connected");
     JpegStream *stream = new JpegStream(req, false, *detector);
-    stream->start();
+
+    TaskHandle_t task;
+    xTaskCreatePinnedToCore(runJpegStream, "jpegStream", 10000, stream, 1, &task, 0);
+
     return ESP_OK;
 }
 
@@ -86,12 +96,13 @@ httpd_uri_t uri_stream = {
     .user_ctx = NULL
 };
 
-
-
 esp_err_t handleDetectorStream(httpd_req_t *req) {
     Serial.println("MJPEG model output stream connected");
     JpegStream *stream = new JpegStream(req, true, *detector);
-    stream->start();
+
+    TaskHandle_t task;
+    xTaskCreatePinnedToCore(runJpegStream, "jpegStream", 10000, stream, 1, &task, 0);
+
     return ESP_OK;
 }
 
@@ -104,10 +115,20 @@ httpd_uri_t uri_detector = {
 
 
 
+void runEventStream(void *p) {
+    EventStream *stream = (EventStream *)p;
+    stream->run();
+    delete stream;
+    vTaskDelete(NULL);
+}
+
 esp_err_t handleEventStream(httpd_req_t *req) {
     Serial.println("Event stream connected");
     EventStream *stream = new EventStream(req, *detector);
-    stream->start();
+
+    TaskHandle_t task;
+    xTaskCreatePinnedToCore(runEventStream, "eventStream", 10000, stream, 2, &task, 0);
+
     return ESP_OK;
 }
 

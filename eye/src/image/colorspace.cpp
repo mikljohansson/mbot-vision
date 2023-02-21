@@ -1,4 +1,4 @@
-#include "image/colorspace.h"
+#include "mbot-vision/image/colorspace.h"
 
 static inline uint8_t fhr(HsvColor hsv, float n) {
     float k = fmod(n + (float)hsv.h / 255.0f * 360.0f / 60.0f, 6.0f);

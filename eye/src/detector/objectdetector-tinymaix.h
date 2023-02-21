@@ -1,12 +1,13 @@
+#include "mbot-vision/detection/objectdetector.h"
+
 extern "C" {
     #include <tinymaix.h>
 }
 
 #include <mbot-vision-model.h>
-#include "detection/objectdetector.h"
-#include "image/camera.h"
-#include "image/jpeg.h"
-#include "common.h"
+#include "mbot-vision/image/camera.h"
+#include "mbot-vision/image/jpeg.h"
+#include "mbot-vision/common.h"
 
 static tm_mdl_t mdl;
 static tm_mat_t *_in;

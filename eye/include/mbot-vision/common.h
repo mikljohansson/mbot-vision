@@ -2,7 +2,7 @@
 #define _MV_COMMON_H_
 
 #include <Arduino.h>
-#include "wiring.h"
+#include "mbot-vision/wiring.h"
 
 template <typename... T>
 void serialPrint(const char *message, T... args) {

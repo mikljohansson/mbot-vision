@@ -9,13 +9,13 @@
 #include <ESP32Ping.h>
 #include <TimeLib.h>
 #include <Adafruit_SSD1306.h>
-#include "http/httpd.h"
-#include "image/camera.h"
-#include "detection/objectdetector.h"
-#include "datalog.h"
-#include "wiring.h"
-#include "mbot-pwm.h"
-#include "common.h"
+#include "mbot-vision/http/httpd.h"
+#include "mbot-vision/image/camera.h"
+#include "mbot-vision/detection/objectdetector.h"
+#include "mbot-vision/datalog.h"
+#include "mbot-vision/wiring.h"
+#include "mbot-vision/mbot-pwm.h"
+#include "mbot-vision/common.h"
 
 typedef struct _WifiNetwork {
     const char *ssid;
@@ -23,10 +23,10 @@ typedef struct _WifiNetwork {
 } WifiNetwork;
 
 static WifiNetwork wifiNetworks[] = {
-    {"krokodil", "mistress"},
-    {"dlink-BF60", "ptfmm78341"},
+    //{"krokodil", "mistress"},
+    //{"dlink-BF60", "ptfmm78341"},
     //{"mikl-samsung-g9", "password"},
-    //{"mikl-p14s", "password"},  
+    {"mikl-p14s", "password"},  
 };
 
 static const char *hostname = "mbot";

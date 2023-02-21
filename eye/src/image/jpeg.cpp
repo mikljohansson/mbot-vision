@@ -1,4 +1,4 @@
-#include "image/jpeg.h"
+#include "mbot-vision/image/jpeg.h"
 
 // http://elm-chan.org/fsw/tjpgd/en/appnote.html
 #include <tjpgdcnf.h>

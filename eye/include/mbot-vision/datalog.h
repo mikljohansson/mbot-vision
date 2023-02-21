@@ -1,5 +1,5 @@
-#ifndef _MV_MBOT_DATALOG_H_
-#define _MV_MBOT_DATALOG_H_
+#ifndef _MV_DATALOG_H_
+#define _MV_DATALOG_H_
 
 #include <Arduino.h>
 

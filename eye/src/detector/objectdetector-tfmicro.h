@@ -1,3 +1,5 @@
+#include "mbot-vision/detection/objectdetector.h"
+
 #include <esp_nn.h>
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
@@ -6,10 +8,9 @@
 #include "tensorflow/lite/micro/micro_utils.h"
 
 #include <mbot-vision-model.h>
-#include "detection/objectdetector.h"
-#include "image/camera.h"
-#include "image/jpeg.h"
-#include "common.h"
+#include "mbot-vision/image/camera.h"
+#include "mbot-vision/image/jpeg.h"
+#include "mbot-vision/common.h"
 
 static const tflite::Model* model = nullptr;
 static tflite::MicroInterpreter* interpreter = nullptr;

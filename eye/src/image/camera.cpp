@@ -1,11 +1,11 @@
-#include "image/camera.h"
+#include "mbot-vision/image/camera.h"
 
 #include <Arduino.h>
 #include <esp_camera.h>
-#include "framerate.h"
-#include "common.h"
-#include "wiring.h"
-#include "datalog.h"
+#include "mbot-vision/framerate.h"
+#include "mbot-vision/common.h"
+#include "mbot-vision/wiring.h"
+#include "mbot-vision/datalog.h"
 
 FrameBufferQueue *fbqueue;
 static TaskHandle_t cameraTask;
@@ -215,5 +215,5 @@ Camera::Camera(DataLogger &logger)
 
 void Camera::begin() {
     fbqueue = new FrameBufferQueue();
-    xTaskCreatePinnedToCore(runStatic, "camera", 10000, this, 2, &cameraTask, 0);
+    xTaskCreatePinnedToCore(runStatic, "camera", 10000, this, 3, &cameraTask, 0);
 }

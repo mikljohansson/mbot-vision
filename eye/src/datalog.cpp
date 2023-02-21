@@ -1,8 +1,9 @@
-#include "datalog.h"
-#include "wiring.h"
+#include "mbot-vision/datalog.h"
+
 #include <FS.h>
 #include <SD_MMC.h>
 #include <TimeLib.h>
+#include "mbot-vision/wiring.h"
 
 #define DIRECTORY_FORMAT "/sdcard/mbot-vision-%d%02d%02d-%02d%02d"
 

@@ -2,9 +2,9 @@
 #define _MV_OBJECTDETECTOR_H_
 
 #include <Arduino.h>
-#include "detection/detector.h"
-#include "image/jpeg.h"
-#include "framerate.h"
+#include "mbot-vision/detection/detector.h"
+#include "mbot-vision/image/jpeg.h"
+#include "mbot-vision/framerate.h"
 
 class ObjectDetector : public Detector {
     private:

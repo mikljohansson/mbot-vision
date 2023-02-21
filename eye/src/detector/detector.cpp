@@ -1,5 +1,5 @@
 
-#include "detection/detector.h"
+#include "mbot-vision/detection/detector.h"
 
 void DetectedObject::serialize(String &out) {
     out += "{\"x\":";
