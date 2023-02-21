@@ -215,5 +215,5 @@ Camera::Camera(DataLogger &logger)
 
 void Camera::begin() {
     fbqueue = new FrameBufferQueue();
-    xTaskCreatePinnedToCore(runStatic, "camera", 10000, this, 1, &cameraTask, 0);
+    xTaskCreatePinnedToCore(runStatic, "camera", 10000, this, 2, &cameraTask, 0);
 }

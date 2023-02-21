@@ -3,45 +3,84 @@
 #define _MV_EVENT_STREAM_H_
 
 #include <Arduino.h>
-#include <ESPAsyncWebServer.h>
-#include "buffered-stream.h"
+#include <WebServer.h>
 #include "framerate.h"
 #include "detection/detector.h"
 
-class EventStream : public BufferedStream {
+class EventStream {
     private:
+        httpd_handle_t _handle;
+        int _sockfd;
+        
+        TaskHandle_t _task;
         Framerate _framerate;
         Detector &_detector;
-        long _last;
 
     public:
-        EventStream(Detector &detector)
-         : _framerate("Event stream framerate: %02f\n"), _detector(detector), _last(0) {
-            _code = 200;
-            _contentType = "text/event-stream";
-            _sendContentLength = false;
+        EventStream(httpd_req_t *request, Detector &detector)
+         : _framerate("Event stream framerate: %02f\n"), _detector(detector) {
+            _handle = request->handle;
+            _sockfd = httpd_req_to_sockfd(request);
+         }
 
-            _framerate.init();
-        }
-
-        virtual ~EventStream() {
-            Serial.println("Event stream disconnected");
+        void start() {
+            xTaskCreatePinnedToCore(runStatic, "eventStream", 10000, this, 1, &_task, 0);
         }
 
     private:
-        void run() {
-            long ts = millis();
-            if (ts - _last > 100) {
-                _last = ts;
+        bool send(const void *data, size_t len) {
+            size_t written = 0;
 
-                DetectedObject blob = _detector.get();
+            while (data && written < len) {
+                int res = httpd_socket_send(_handle, _sockfd, ((const char *)data) + written, len - written, 0);
+
+                if (res < 0) {
+                    Serial.println(String("Event stream disconnected with error ") + res);
+                    httpd_sess_trigger_close(_handle, _sockfd);
+                    return false;
+                }
+
+                written += res;
+
+                // Prevents watchdog from triggering
+                delay(1);
+            }
+
+            return true;
+        }
+
+        bool send(const char *data) {
+            return send(data, strlen(data));
+        }
+
+        void run() {
+            Serial.println("Starting object detection event stream");
+            
+            send("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n");
+            _framerate.init();
+
+            while (true) {
+                DetectedObject blob = _detector.wait();
                 String data = "data: ";
                 blob.serialize(data);
                 data += "\r\n\r\n";
-                send(data.c_str(), data.length());
+                
+                if (!send(data.c_str(), data.length())) {
+                    return;
+                }
 
                 _framerate.tick();
+
+                // Let other tasks run too
+                backoff();
             }
+        }
+
+        static void runStatic(void *p) {
+            EventStream *stream = (EventStream *)p;
+            stream->run();
+            delete stream;
+            vTaskDelete(NULL);
         }
 };
 
