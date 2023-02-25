@@ -52,6 +52,10 @@ find components/esp-nn -name '*esp32s3*' -exec rm -f {} ';'
 for f in components/tflite-lib/tensorflow/lite/micro/kernels/esp_nn/*.cc; do rm components/tflite-lib/tensorflow/lite/micro/kernels/`basename $f`; done
 ```
 
+## Create a WiFi config
+
+Copy [mbot-vision-config.h-example](eye/include/mbot-vision-config.h-example) to `eye/include/mbot-vision-config.h` and edit it to include the names and passwords of your WiFi networks.
+
 ## Program the microcontroller using PlatformIO
 
 * Open `mbot-vision.code-workspace` in the [PlatformIO IDE](https://platformio.org/)
@@ -61,9 +65,16 @@ for f in components/tflite-lib/tensorflow/lite/micro/kernels/esp_nn/*.cc; do rm 
 * The ESP32 will print its IP address and other info on the serial bus, as well as show it 
   on the OLED screen if one is connected.
 
+# Block programming the mBot
+
+This Scratch program will make the mBot chase after the detected object. You may need to adjust it a bit if you don't have 2 separate ultrasonic sensors connected.
+
+![Block programming](scratch.png)
+
+
 # ESP32 hardware setup
 
-See [wiring.h](eye/include/wiring.h) for how to wire up the ESP32 with the mBot
+See [wiring.h](eye/include/mbot-vision/wiring.h) for how to wire up the ESP32 with the mBot
 
 ## Required wiring
 
@@ -71,7 +82,7 @@ See [wiring.h](eye/include/wiring.h) for how to wire up the ESP32 with the mBot
   signals. These signals can be read using the joystick input block on the mBot.
 
    * The x and y location of the object will be encoded as PWM signals with a frequency in the 
-     range of `[min=128Hz, max=1024Hz]`. The frequency corresponds to the location of the object 
+     range of `[min=256Hz, max=1024Hz]`. The frequency corresponds to the location of the object 
      in the camera frame. You can measure the exact output values that the robot gives using the 
      Joystick sensor block in Scratch or use the `pulseIn` function in Arduino. 
 

@@ -5,10 +5,10 @@
 #include "mbot-vision/common.h"
 
 #define MV_PWM_FREQ    1024
-#define MV_PWM_BITS    13   // Resolution 8, 10, 12, 15
-#define MV_PWM_OFF     (1 << (MV_PWM_BITS - 5))
-#define MV_PWM_MIN     (1 << (MV_PWM_BITS - 3))
-#define MV_PWM_MAX     ((1 << MV_PWM_BITS) - MV_PWM_MIN)
+#define MV_PWM_BITS    10       // 10 bits gives (1 << 10) = 1024 values
+#define MV_PWM_OFF     32       // Frequency indicating no detection
+#define MV_PWM_MIN     256
+#define MV_PWM_MAX     1024 
 #define MV_PWM_RANGE   (MV_PWM_MAX - MV_PWM_MIN)
 
 MBotPWM::MBotPWM(Detector &detector)

@@ -10,11 +10,11 @@ del backbone.output
 # Delete the AvgPool
 del backbone.features[-1:]
 
-# Avoid the last downsampling which causes too low resolution
-#backbone.features[-1][0].dw_conv.conv.stride = 1
-
 # Remove the last downsampling block which has too many channels
 del backbone.features[-1]
+
+# Avoid the last downsampling which causes too low resolution
+backbone.features[-1][0].dw_conv.conv.stride = 1
 
 model = dict(
     type=MobileNetSegmentV1,

@@ -16,32 +16,14 @@
 #include "mbot-vision/wiring.h"
 #include "mbot-vision/mbot-pwm.h"
 #include "mbot-vision/common.h"
-
-typedef struct _WifiNetwork {
-    const char *ssid;
-    const char *password;
-} WifiNetwork;
-
-static WifiNetwork wifiNetworks[] = {
-    //{"krokodil", "mistress"},
-    //{"dlink-BF60", "ptfmm78341"},
-    //{"mikl-samsung-g9", "password"},
-    {"mikl-p14s", "password"},  
-};
-
-static const char *hostname = "mbot";
+#include "mbot-vision-config.h"
 
 static Adafruit_SSD1306 *oled;
 static WiFiMulti *wifiMulti;
-
 static DataLogger *logger;
 static Camera *camera;
-
-//static BlobDetector detector({175, 60, 75});
 static ObjectDetector *detector;
-
 static MBotPWM *mbot;
-
 
 template <typename... T>
 void oledPrint(const char *message, T... args) {
@@ -118,7 +100,7 @@ void setup() {
     }
         
     WiFi.mode(WIFI_STA);
-    WiFi.setHostname(hostname);
+    WiFi.setHostname(MV_HOSTNAME);
     WiFi.setAutoReconnect(true);
 
     // https://github.com/espressif/esp-idf/issues/1366#issuecomment-569377207

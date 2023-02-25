@@ -84,7 +84,7 @@ esp_err_t handleJpegStream(httpd_req_t *req) {
     JpegStream *stream = new JpegStream(req, false, *detector);
 
     TaskHandle_t task;
-    xTaskCreatePinnedToCore(runJpegStream, "jpegStream", 10000, stream, 1, &task, 0);
+    xTaskCreatePinnedToCore(runJpegStream, "jpegStream", 4096, stream, 1, &task, 0);
 
     return ESP_OK;
 }
@@ -101,7 +101,7 @@ esp_err_t handleDetectorStream(httpd_req_t *req) {
     JpegStream *stream = new JpegStream(req, true, *detector);
 
     TaskHandle_t task;
-    xTaskCreatePinnedToCore(runJpegStream, "jpegStream", 10000, stream, 1, &task, 0);
+    xTaskCreatePinnedToCore(runJpegStream, "detectorStream", 4096, stream, 1, &task, 0);
 
     return ESP_OK;
 }
@@ -127,8 +127,8 @@ esp_err_t handleEventStream(httpd_req_t *req) {
     EventStream *stream = new EventStream(req, *detector);
 
     TaskHandle_t task;
-    xTaskCreatePinnedToCore(runEventStream, "eventStream", 10000, stream, 2, &task, 0);
-
+    xTaskCreatePinnedToCore(runEventStream, "eventStream", 4096, stream, 2, &task, 0);
+    
     return ESP_OK;
 }
 
@@ -146,6 +146,9 @@ void httpdRun(Detector &d) {
 
     // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/protocols/esp_http_server.html
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.core_id = 0;
+    config.lru_purge_enable = true;
+
     httpd_handle_t server = NULL;
 
     if (httpd_start(&server, &config) == ESP_OK) {

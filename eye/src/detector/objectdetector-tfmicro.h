@@ -8,6 +8,7 @@
 #include "tensorflow/lite/micro/micro_utils.h"
 
 #include <mbot-vision-model.h>
+#include <mbot-vision-config.h>
 #include "mbot-vision/image/camera.h"
 #include "mbot-vision/image/jpeg.h"
 #include "mbot-vision/common.h"
@@ -120,10 +121,13 @@ ObjectDetector::ObjectDetector()
  : _framerate("Object detector framerate: %02f\n"), _detected({0, 0, false}), _lastoutputbuf(0) {
     // Allocate the tensor memory block on internal memory which is much smaller but a bit faster than external SPI RAM
     // https://github.com/espressif/tflite-micro-esp-examples/blob/master/examples/person_detection/main/main_functions.cc#L70
-    tensor_arena = (uint8_t *)heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    
+    // Note: Using fast system RAM seems to cause some issues with the lwIP/webserver, which might not be getting enough system 
+    // memory to function so it's best to use SPI RAM for the tensors instead.
+    //tensor_arena = (uint8_t *)heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     
     // Allocates on SPI RAM (slower but bigger memory)
-    //tensor_arena = new uint8_t[kTensorArenaSize];
+    tensor_arena = new uint8_t[kTensorArenaSize];
 
     if (!tensor_arena) {
         serialPrint("Failed to allocate %d bytez for tfmicro tensor arena\n", kTensorArenaSize);
@@ -326,7 +330,7 @@ void ObjectDetector::run() {
         }
 
         float probability = ((float)maxv + 127) / 255;
-        if (probability >= 0.5) {
+        if (probability >= MV_DETECTION_PROBABILITY) {
             _detected = {
                 ((float)maxx + 0.5f) / MBOT_VISION_MODEL_OUTPUT_WIDTH, 
                 ((float)maxy + 0.5f) / MBOT_VISION_MODEL_OUTPUT_HEIGHT,

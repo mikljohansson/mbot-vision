@@ -20,8 +20,15 @@ parser.add_argument('--input-width', type=int, help='Input width', default=160)
 parser.add_argument('--input-height', type=int, help='Input height', default=120)
 args = parser.parse_args()
 
+
+def output_exists(filename):
+    targetname = os.path.join(args.train, os.path.splitext(os.path.basename(filename))[0] + '.png')
+    return os.path.exists(targetname)
+
+
 labels_of_interest = set(filter(None, args.classes.split(',')))
 files = glob.glob(os.path.join(args.input, '*.jpg'))
+files = list(filter(lambda f: not output_exists(f), files))
 
 model = torch.hub.load('ultralytics/yolov5', 'yolov5x')
 pbar = tqdm.tqdm(total=len(files))

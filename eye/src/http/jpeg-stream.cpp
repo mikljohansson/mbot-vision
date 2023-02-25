@@ -3,16 +3,14 @@
 #include <memory>
 
 JpegStream::JpegStream(httpd_req_t *request, bool showDetector, Detector &detector)
- : _framerate("MJPEG stream framerate: %02f\n"), _showDetector(showDetector), _detector(detector), _disconnected(false) {
-    _handle = request->handle;
-    _sockfd = httpd_req_to_sockfd(request);
-}
+ : AsyncStream(request), 
+   _framerate("MJPEG stream framerate: %02f\n"), _showDetector(showDetector), _detector(detector), _disconnected(false) {}
 
 void JpegStream::run() {
     Serial.println("Starting MJPEG stream");
     std::unique_ptr<JpegDecoder> decoder;
 
-    if (!send("HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=gc0p4Jq0M2Yt08jU534c0p\r\n")) {
+    if (!send("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: multipart/x-mixed-replace; boundary=gc0p4Jq0M2Yt08jU534c0p\r\n")) {
         return;
     }
 
@@ -40,6 +38,7 @@ void JpegStream::run() {
         headers += "\r\n";
         
         if (!send(headers.c_str(), headers.length())) {
+            fbqueue->release(fb);
             return;
         }
 
@@ -83,12 +82,14 @@ void JpegStream::run() {
             }
             else {
                 if (!send(fb.frame->buf, fb.frame->len)) {
+                    fbqueue->release(fb);
                     return;
                 }
             }
         }
         else if (!frame2jpg_cb(fb.frame, 60, sendStatic, this) || _disconnected) {
             Serial.println("Failed to convert framebuffer to jpeg");
+            fbqueue->release(fb);
             return;
         }
 
@@ -98,33 +99,6 @@ void JpegStream::run() {
         // Let other tasks run too
         delay(50);
     }
-}
-
-bool JpegStream::send(const void *data, size_t len) {
-    size_t written = 0;
-    long ts = 1;
-
-    while (data && written < len) {
-        int res = httpd_socket_send(_handle, _sockfd, ((const char *)data) + written, len - written, 0);
-
-        if (res < 0) {
-            Serial.println(String("MJPEG stream disconnected with error ") + res);
-            httpd_sess_trigger_close(_handle, _sockfd);
-            return false;
-        }
-
-        written += res;
-
-        // Prevents watchdog from triggering
-        ts = res > 0 ? std::max(ts / 2, 1L) : std::min(ts * 2, 100L);
-        delay(ts);
-    }
-
-    return true;
-}
-
-bool JpegStream::send(const char *data) {
-    return send(data, strlen(data));
 }
 
 size_t JpegStream::sendStatic(void *p, size_t index, const void *data, size_t len) {

@@ -52,6 +52,7 @@ String indexDocument = R"doc(<html>
               crosshair.style.top = Math.round(rect.height * blob.y) + "px";
               crosshair.style.display = blob.detected ? "inline" : "none";
               //crosshair.style.color = blob.color;
+              console.log(e.data);
           };
         }
 

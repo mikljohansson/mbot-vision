@@ -1,0 +1,20 @@
+#ifndef _MV_CONFIG_H_
+#define _MV_CONFIG_H_
+
+// Minimum model output probability/confidence to count as a positive detection
+#define MV_DETECTION_PROBABILITY    0.4
+
+// Network hostname to use. Depending on your router you should be able to access the web UI at http://mbot/ or http://mbot.local/
+#define MV_HOSTNAME    "mbot"
+
+typedef struct _WifiNetwork {
+    const char *ssid;
+    const char *password;
+} WifiNetwork;
+
+static WifiNetwork wifiNetworks[] = {
+    {"wifi-SSID", "password"},
+    //{"another-wifi-network", "password2"},
+};
+
+#endif

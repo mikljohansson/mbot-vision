@@ -10,7 +10,8 @@ del backbone.output
 # Delete the AvgPool
 del backbone.features[-1:]
 
-# Avoid the last downsampling which causes too low resolution
+# Avoid the last 2 downsampling which causes too low resolution
+backbone.features[-2][0].dw_conv.conv.stride = 1
 backbone.features[-1][0].dw_conv.conv.stride = 1
 
 # Remove the last convolution with too many channels

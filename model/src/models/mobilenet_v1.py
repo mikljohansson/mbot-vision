@@ -22,11 +22,11 @@ class SegmentationNeck(nn.Sequential):
 
             UpsampleInterpolate2d(),
             nn.Conv2d(mid_first_ch, mid_first_ch, kernel_size=3, padding=1, groups=mid_first_ch, bias=False),
-            nn.Conv2d(mid_first_ch, mid_second_ch, kernel_size=1),
+            nn.Conv2d(mid_first_ch, 1, kernel_size=1),
 
-            UpsampleInterpolate2d(),
-            nn.Conv2d(mid_second_ch, mid_second_ch, kernel_size=3, padding=1, groups=mid_second_ch, bias=False),
-            nn.Conv2d(mid_second_ch, 1, kernel_size=1),
+            #UpsampleInterpolate2d(),
+            #nn.Conv2d(mid_second_ch, mid_second_ch, kernel_size=3, padding=1, groups=mid_second_ch, bias=False),
+            #nn.Conv2d(mid_second_ch, 1, kernel_size=1),
         )
 
 

@@ -56,8 +56,8 @@ COCO_MODEL_PATH ?= $(EXPERIMENT)/coco.pth
 COCO_MAX_SAMPLE_COUNT ?= 25000
 
 # Hyperparams for the fine-tuning on recorded data
-# - 3k optimization steps seems to be fine for this little model
-REC_EPOCHS ?= 100
+# - 3-5k optimization steps seems to be fine for this little model
+REC_EPOCHS ?= 300
 REC_BATCH_SIZE ?= 64
 REC_ACCUMULATION_STEPS ?= 1
 REC_LEARNING_RATE ?= 5e-4
