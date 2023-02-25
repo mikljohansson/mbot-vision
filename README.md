@@ -67,7 +67,9 @@ Copy [mbot-vision-config.h-example](eye/include/mbot-vision-config.h-example) to
 
 # Block programming the mBot
 
-This Scratch program will make the mBot chase after the detected object. You may need to adjust it a bit if you don't have 2 separate ultrasonic sensors connected.
+This Scratch program will make the mBot chase after the detected object. You may need to adjust it a bit if you don't have 2 separate ultrasonic sensors connected. 
+
+The program works better if you use the "Upload" mode (compiled C++ code) instead of the "Live" mode (each block instruction streamed to the robot). This is due to the upload mode being a lot faster, so the robot gets quicker response times to movements. You can of course debug the program in Live mode until it works as intended, and then upload it.
 
 ![Block programming](scratch.png)
 
