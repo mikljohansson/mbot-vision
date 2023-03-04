@@ -1,4 +1,4 @@
-# MBot Vision
+# mBot Vision
 
 Equip your [Makeblock mBot](https://www.makeblock.com/) with a cheap ESP32-CAM and use machine learning 
 to recognize objects you've train it to. The included example will make the mBot chase after colored balls!
@@ -105,14 +105,15 @@ See [mbot-pwm.cpp](eye/src/mbot-pwm.cpp) for details.
 * `MV_FLASH_PIN` will output a PWM signal to control some flood lights from the web UI, for example
   some high power LED's connected with a transistor and some suitably sized resistors.
 
-* You can use the `LOG_TO_SDCARD` configure the code to log to an SDcard. Since the SDcard pins are
-  shared, it means that in this case you must also disconnect all other wires like the 
+* You can set the `LOG_TO_SDCARD` define to log images to an SDcard. This way you can drive 
+  the mBot around by remote and record training images. Since the SDcard pins are shared, 
+  it means that in this case you must also disconnect all other wires like the 
   floodlights and mBot connection.
 
 ## FDTI programmer
 
 The ESP32-CAM unfortunately doesn't have a RST pin, so in order to get the programmer to 
-automatically put the it into programming/flashing mode you need to solder a wire onto the 
+automatically put it into programming/flashing mode you need to solder a wire onto the 
 inner connector of the RST button and connect that to the RTS pin on the FTDI programmer. 
 Doing this will allow you to upload new firmware without having to manually hold down the 
 I00 button or press the RST button.
