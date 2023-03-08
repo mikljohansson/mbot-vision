@@ -10,12 +10,14 @@ INFERENCE_EXTENSION = $(shell echo $(INFERENCE_ENGINE) | sed "s/TINYMAIX/tmdl/" 
 # See this link for lots of pretrained models
 # https://github.com/osmr/imgclsmob/tree/master/pytorch
 
-# Pretrained FD-MobileNet v1 with depth_multiplier=0.25
-MODEL ?= fdmobilenet_025
+# Pretrained FD-MobileNet v1 with depth_multiplier=0.25 and different resolutions at the bottom-most level
+MODEL ?= fdmobilenet_025_10x6
+#MODEL ?= fdmobilenet_025_5x3
 
-# Pretrained MobileNet v1 with depth_multiplier=0.25
+# Pretrained MobileNet v1 with depth_multiplier=0.25 and different resolutions at the bottom-most level
 # https://github.com/osmr/imgclsmob/tree/master/pytorch (lots of other pretrained models available here too)
-#MODEL ?= mobilenet_v1_025
+#MODEL ?= mobilenet_v1_025_10x6
+#MODEL ?= mobilenet_v1_025_5x3
 
 # Slimmed down MobileNet v3 (not pretrained)
 #MODEL ?= mobilenet_v3_micro
@@ -25,6 +27,7 @@ MODEL ?= fdmobilenet_025
 
 # Custom models (not pretrained)
 #MODEL ?= mvnet_micro
+#MODEL ?= mvnet_micro_memory
 #MODEL ?= tmnet_micro
 #MODEL ?= yolov6p
 

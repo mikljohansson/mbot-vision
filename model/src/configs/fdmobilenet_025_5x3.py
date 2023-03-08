@@ -1,6 +1,6 @@
 from pytorchcv.models.fdmobilenet import fdmobilenet_wd4
 
-from src.models.mobilenet_v1 import MobileNetSegmentV1
+from src.models.mobilenet_v1 import MobileNetSegmentV1, CaptureTensor
 
 backbone = fdmobilenet_wd4(pretrained=True)
 
@@ -10,12 +10,17 @@ del backbone.output
 # Delete the AvgPool
 del backbone.features[-1:]
 
-# Avoid the last 2 downsampling which causes too low resolution
-backbone.features[-2][0].dw_conv.conv.stride = 1
+# Avoid the last downsampling which causes too low resolution
 backbone.features[-1][0].dw_conv.conv.stride = 1
 
 # Remove the last convolution with too many channels
 del backbone.features[-1][-1]
+
+# Inject tensor capturing to emulate a UNet by concatenating high-resolution tensors to the SegmentationNeck
+captures = []
+backbone.features[-4].append(CaptureTensor(captures, 16, 4))
+backbone.features[-3].append(CaptureTensor(captures, 32, 8))
+backbone.captures = (captures, (4, 8))
 
 model = dict(
     type=MobileNetSegmentV1,
@@ -23,6 +28,7 @@ model = dict(
     backbone_out_ch=128,
     input_size=(80, 48),    # WxH
     output_size=(20, 12),   # WxH
+    upsampling_factor=2
 )
 
 solver = dict(

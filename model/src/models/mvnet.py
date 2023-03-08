@@ -4,6 +4,7 @@ from torch import nn
 from einops import einsum
 
 from src.models.detection import DetectionHead
+from src.models.memory import WorkingMemoryQuery, WorkingMemory, WorkingMemoryConv2d, WorkingMemoryUpdate
 
 
 class ResidualBlock(nn.Sequential):
@@ -163,17 +164,20 @@ class BiasedSqueezeAndExcitation(nn.Module):
 
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.maxpool = nn.AdaptiveMaxPool2d(1)
-        self.conv_map = nn.Conv2d(in_ch * 2, mid_ch, kernel_size=1)
+        self.memory = WorkingMemoryQuery(in_ch, in_ch)
+        self.conv_map = nn.Conv2d(in_ch * 3, mid_ch, kernel_size=1)
         self.mid_act = nn.ReLU()
         self.conv_bias = nn.Conv2d(mid_ch, out_ch, kernel_size=1)
         self.conv_mul = nn.Conv2d(mid_ch, out_ch, kernel_size=1)
         self.act_mul = nn.Sigmoid()
 
     def factors(self, x):
+        # Downsample to B, C*3, 1, 1
         y1 = self.avgpool(x)
         y2 = self.maxpool(x)
+        y3 = self.memory(x)
+        y = torch.cat([y1, y2, y3], dim=1)
 
-        y = torch.cat([y1, y2], dim=1)
         y = self.conv_map(y)
         y = self.mid_act(y)
 
@@ -365,7 +369,7 @@ class ConvNeXt(nn.Sequential):
     """
     ConvNeXt module with optional channel attention
     """
-    def __init__(self, in_ch, kernel_size=3, groups=1, expansion_ratio=4, attention=False):
+    def __init__(self, in_ch, kernel_size=3, groups=1, expansion_ratio=4, attention=True):
         mid_ch = int(in_ch * expansion_ratio)
 
         super().__init__(
@@ -385,7 +389,7 @@ class SpatialPyramidPool(nn.Module):
     """
     Mix of SPP and ConvNeXt with optional channel attention
     """
-    def __init__(self, in_ch, attention=False, channel_add=False):
+    def __init__(self, in_ch, attention=True, channel_add=False):
         super().__init__()
         self.channel_add = channel_add
         self.in_ch = in_ch
@@ -437,7 +441,7 @@ class SSPF(nn.Module):
     """
     Spatial Pyramid Pool Fast from YOLOv5/v8 with optional channel attention
     """
-    def __init__(self, in_ch, out_ch, attention=False):
+    def __init__(self, in_ch, out_ch, attention=True):
         super().__init__()
         mid_ch = in_ch // 2
 
@@ -463,13 +467,11 @@ class MVNetModel(nn.Module):
     def __init__(self, config):
         super().__init__()
 
-        self.stem = nn.Sequential(
-            nn.Conv2d(3, 4, kernel_size=1),
-            nn.BatchNorm2d(4)
-        )
-
+        self.memory = WorkingMemory(enabled=config.get('memory', False))
         self.backbone = nn.Sequential(
             # 80x60 input
+            WorkingMemoryConv2d(3, 4, kernel_size=1),
+            nn.BatchNorm2d(4),
 
             # 40x30
             DownsampleConv(4, 4),
@@ -482,21 +484,25 @@ class MVNetModel(nn.Module):
             DenseBlock(
                 # 10x8
                 DownsampleConv(8, 16),
+                WorkingMemoryUpdate(16),
                 ConvNeXt(16, expansion_ratio=2, groups=4),
 
                 ResidualBlock(
                     # 5x4
                     DownsampleConv(16, 16),
+                    WorkingMemoryUpdate(16),
 
                     ConvNeXt(16, expansion_ratio=2, groups=4),
                     nn.Conv2d(16, 16, kernel_size=1),
                     ConvNeXt(16, expansion_ratio=2, groups=4),
+                    WorkingMemoryUpdate(16),
 
                     # 10x8
                     UpsampleConv(16, 16, scale_factor=2)
                 ),
 
                 ConvNeXt(16, expansion_ratio=2, groups=4),
+                WorkingMemoryUpdate(16),
 
                 # 20x15
                 UpsampleConv(16, 8, scale_factor=2)
@@ -507,11 +513,11 @@ class MVNetModel(nn.Module):
 
         self.head = nn.Identity()
 
-    def forward(self, x):
-        x = self.stem(x)
-        x = self.backbone(x)
-        x = self.head(x)
-        return x
+    def forward(self, x, prev_timestep_state=None):
+        with self.memory.enter(x, prev_timestep_state) as ctx:
+            x = self.backbone(x)
+            x = self.head(x)
+            return x#, ctx.get()
 
     def detect(self, x):
         return DetectionHead()(x.to('cpu'))
