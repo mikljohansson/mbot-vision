@@ -47,13 +47,12 @@ class SegmentationNeck(nn.ModuleList):
         return x
 
 class CaptureTensor(nn.Module):
-    def __init__(self, captures, in_ch, out_ch):
+    def __init__(self, captures):
         super().__init__()
         self.captures = captures
-        self.proj = nn.Conv2d(in_ch, out_ch, kernel_size=1)
 
     def forward(self, x):
-        self.captures.append(self.proj(x))
+        self.captures.append(x)
         return x
 
 

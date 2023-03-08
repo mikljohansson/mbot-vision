@@ -15,9 +15,9 @@ del backbone.features[-1]
 
 # Inject tensor capturing to emulate a UNet by concatenating high-resolution tensors to the SegmentationNeck
 captures = []
-backbone.features[-3].append(CaptureTensor(captures, 32, 4))
-backbone.features[-2].append(CaptureTensor(captures, 64, 8))
-backbone.captures = (captures, (4, 8))
+backbone.features[-3].append(CaptureTensor(captures))
+backbone.features[-2].append(CaptureTensor(captures))
+backbone.captures = (captures, (32, 64))
 
 model = dict(
     type=MobileNetSegmentV1,

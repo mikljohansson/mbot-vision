@@ -16,6 +16,11 @@ del backbone.features[-1]
 # Avoid the last downsampling which causes too low resolution
 backbone.features[-1][0].dw_conv.conv.stride = 1
 
+# Inject tensor capturing to emulate a UNet by concatenating high-resolution tensors to the SegmentationNeck
+captures = []
+backbone.features[-3].append(CaptureTensor(captures))
+backbone.captures = (captures, (32,))
+
 model = dict(
     type=MobileNetSegmentV1,
     backbone=backbone,

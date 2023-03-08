@@ -17,6 +17,11 @@ backbone.features[-1][0].dw_conv.conv.stride = 1
 # Remove the last convolution with too many channels
 del backbone.features[-1][-1]
 
+# Inject tensor capturing to emulate a UNet by concatenating high-resolution tensors to the SegmentationNeck
+captures = []
+backbone.features[-4].append(CaptureTensor(captures))
+backbone.captures = (captures, (16,))
+
 model = dict(
     type=MobileNetSegmentV1,
     backbone=backbone,
