@@ -27,7 +27,11 @@ MODEL ?= fdmobilenet_025_5x3
 
 # Custom models (not pretrained)
 #MODEL ?= mvnet_micro
-#MODEL ?= mvnet_micro_memory
+#MODEL ?= mvnet_micro_noatt
+
+#MODEL ?= vmnet_micro
+#MODEL ?= vmnet_micro_nomem
+
 #MODEL ?= tmnet_micro
 #MODEL ?= yolov6p
 

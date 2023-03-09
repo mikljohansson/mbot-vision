@@ -16,7 +16,7 @@ class UpsampleInterpolate2d(nn.Module):
 class SegmentationNeck(nn.ModuleList):
     def __init__(self, in_ch, upsampling_factor, capture_channels):
         super().__init__()
-        mid_ch = 32
+        mid_ch = max(in_ch // 4, 4)
         self.append(nn.Conv2d(in_ch, mid_ch if upsampling_factor > 0 else 1, kernel_size=1))
 
         for i in range(upsampling_factor):
@@ -25,6 +25,9 @@ class SegmentationNeck(nn.ModuleList):
 
             self.append(UpsampleInterpolate2d())
             self.append(nn.Conv2d(mid_ch, mid_ch, kernel_size=3, padding=1, groups=mid_ch, bias=False))
+            self.append(nn.BatchNorm2d(mid_ch + cap_ch))
+            self.append(nn.Conv2d(mid_ch + cap_ch, mid_ch + cap_ch, kernel_size=1))
+            self.append(nn.ReLU())
             self.append(nn.Conv2d(mid_ch + cap_ch, next_ch if i < upsampling_factor - 1 else 1, kernel_size=1))
 
             mid_ch = next_ch

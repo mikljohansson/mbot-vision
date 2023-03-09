@@ -4,7 +4,7 @@ model = dict(
     type=MVNetModel,
     input_size=(80, 48),    # WxH
     output_size=(20, 12),   # WxH
-    attention=True
+    attention=False
 )
 
 solver = dict(

@@ -4,6 +4,7 @@ from torch import nn
 from einops import einsum
 
 from src.models.detection import DetectionHead
+from src.models.memory import WorkingMemoryQuery, WorkingMemory, WorkingMemoryConv2d, WorkingMemoryUpdate
 
 
 class ResidualBlock(nn.Sequential):
@@ -163,7 +164,8 @@ class BiasedSqueezeAndExcitation(nn.Module):
 
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.maxpool = nn.AdaptiveMaxPool2d(1)
-        self.conv_map = nn.Conv2d(in_ch * 2, mid_ch, kernel_size=1)
+        self.memory = WorkingMemoryQuery(in_ch, in_ch)
+        self.conv_map = nn.Conv2d(in_ch * 3, mid_ch, kernel_size=1)
         self.mid_act = nn.ReLU()
         self.conv_bias = nn.Conv2d(mid_ch, out_ch, kernel_size=1)
         self.conv_mul = nn.Conv2d(mid_ch, out_ch, kernel_size=1)
@@ -173,7 +175,8 @@ class BiasedSqueezeAndExcitation(nn.Module):
         # Downsample to B, C*3, 1, 1
         y1 = self.avgpool(x)
         y2 = self.maxpool(x)
-        y = torch.cat([y1, y2], dim=1)
+        y3 = self.memory(x)
+        y = torch.cat([y1, y2, y3], dim=1)
 
         y = self.conv_map(y)
         y = self.mid_act(y)
@@ -460,59 +463,65 @@ class SSPF(nn.Module):
         return y
 
 
-class MVNetModel(nn.Module):
+class WMNetModel(nn.Module):
     """
-    UNet-like model with addition of spatial pyramid pooling and channel and block attention
+    Based on MVNet with addition of cross time-step working memory
     """
     def __init__(self, config):
         super().__init__()
 
+        self.memory = WorkingMemory(enabled=config.get('memory', False))
         self.backbone = nn.Sequential(
             # 80x60 input
-            nn.Conv2d(3, 4, kernel_size=1),
+            WorkingMemoryConv2d(3, 4, kernel_size=1),
             nn.BatchNorm2d(4),
 
             # 40x30
             DownsampleConv(4, 4),
-            SpatialPyramidPool(4, attention=config.attention),
+            SpatialPyramidPool(4),
 
             # 20x15
             DownsampleConv(4, 8),
-            SpatialPyramidPool(8, attention=config.attention),
+            SpatialPyramidPool(8),
 
             DenseBlock(
                 # 10x8
                 DownsampleConv(8, 16),
-                ConvNeXt(16, expansion_ratio=2, groups=4, attention=config.attention),
+                WorkingMemoryUpdate(16),
+                ConvNeXt(16, expansion_ratio=2, groups=4),
 
                 DenseBlock(
                     # 5x4
                     DownsampleConv(16, 16),
+                    WorkingMemoryUpdate(16),
 
-                    ConvNeXt(16, expansion_ratio=2, groups=4, attention=config.attention),
+                    ConvNeXt(16, expansion_ratio=2, groups=4),
                     nn.Conv2d(16, 16, kernel_size=1),
-                    ConvNeXt(16, expansion_ratio=2, groups=4, attention=config.attention),
+                    ConvNeXt(16, expansion_ratio=2, groups=4),
+                    WorkingMemoryUpdate(16),
 
                     # 10x8
                     UpsampleConv(16, 16, scale_factor=2)
                 ),
 
                 ConvNormAct(32, 16, kernel_size=1, attention=config.attention),
-                ConvNeXt(16, expansion_ratio=2, groups=4, attention=config.attention),
+                ConvNeXt(16, expansion_ratio=2, groups=4),
+                WorkingMemoryUpdate(16),
 
                 # 20x15
                 UpsampleConv(16, 8, scale_factor=2)
             ),
 
-            SSPF(16, 1, attention=config.attention)
+            SSPF(16, 1)
         )
 
         self.head = nn.Identity()
 
-    def forward(self, x):
-        x = self.backbone(x)
-        x = self.head(x)
-        return x
+    def forward(self, x, prev_timestep_state=None):
+        with self.memory.enter(prev_timestep_state) as ctx:
+            x = self.backbone(x)
+            x = self.head(x)
+            return x#, ctx.get()
 
     def detect(self, x):
         return DetectionHead()(x.to('cpu'))

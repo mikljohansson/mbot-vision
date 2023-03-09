@@ -90,6 +90,9 @@ class SpatialPyramidPool(nn.Module):
 
 
 class TMNetModel(nn.Module):
+    """
+    Stripped down prototype MVNet model that might work on TinyMaix inference engine
+    """
     def __init__(self, config):
         super().__init__()
 

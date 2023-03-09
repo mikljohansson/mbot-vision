@@ -1,10 +1,10 @@
-from src.models.mvnet import MVNetModel
+from src.models.wmnet import WMNetModel
 
 model = dict(
-    type=MVNetModel,
+    type=WMNetModel,
     input_size=(80, 48),    # WxH
     output_size=(20, 12),   # WxH
-    attention=True
+    memory=True,            # Disable cross time-step working memory
 )
 
 solver = dict(
