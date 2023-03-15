@@ -89,12 +89,11 @@ class MobileNetSegmentV1(nn.Module):
     def detect(self, x):
         return DetectionHead()(x.to('cpu'))
 
-    def deploy(self, finetuning=False):
-        if not finetuning:
-            # Add the final detection head directly into the model
-            self.head = DetectionHead()
+    def deploy(self):
+        # Add the final detection head directly into the model
+        self.head = DetectionHead()
 
-            # Perform activation inplace
-            for m in self.modules():
-                if type(m) in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
-                    m.inplace = True
+        # Perform activation inplace
+        for m in self.modules():
+            if type(m) in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
+                m.inplace = True

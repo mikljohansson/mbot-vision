@@ -543,38 +543,43 @@ class MVNetModel(nn.Module):
                         UpsampleConv(channels[5], channels[4], scale_factor=2)
                     ),
 
-                    WorkingMemoryUpdate(channels[4] * 2) if memory else nn.Identity(),
+                    #WorkingMemoryUpdate(channels[4] * 2) if memory else nn.Identity(),
 
                     # 20x12
                     UpsampleConv(channels[4] * 2, channels[3], scale_factor=2)
                 ),
 
-                WorkingMemoryUpdate(channels[3] * 2) if memory else nn.Identity(),
+                #WorkingMemoryUpdate(channels[3] * 2) if memory else nn.Identity(),
                 SSPF(channels[3] * 2, 1, attention=config.attention)
             )
 
         self.head = nn.Identity()
 
-    def forward(self, x, prev_timestep_state=None):
-        with self.memory.enter(prev_timestep_state) as ctx:
+    def forward(self, x, prev_state=None, state_mask=None):
+        if self.memory.is_enabled:
+            init_state = prev_state * state_mask.view((state_mask.shape[0], 1, 1, 1)) if prev_state is not None else None
+            with self.memory.enter(init_state) as context:
+                x = self.backbone(x)
+                x = self.head(x)
+                return x, context.get()
+        else:
             x = self.backbone(x)
             x = self.head(x)
-            return x#, ctx.get()
+            return x
 
     def detect(self, x):
         return DetectionHead()(x.to('cpu'))
 
-    def deploy(self, finetuning=False):
+    def deploy(self):
         # Deploy sub modules
         for m in self.modules():
             if hasattr(m, 'deploy') and self != m:
                 m.deploy()
 
         # Add the final detection head directly into the model
-        if not finetuning:
-            self.head = DetectionHead()
+        self.head = DetectionHead()
 
-            # Perform activation inplace
-            for m in self.modules():
-                if type(m) in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
-                    m.inplace = True
+        # Perform activation inplace
+        for m in self.modules():
+            if type(m) in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
+                m.inplace = True

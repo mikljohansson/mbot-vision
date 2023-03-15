@@ -1,6 +1,5 @@
 import os
 import glob
-import random
 
 import cv2
 import numpy as np
@@ -9,7 +8,7 @@ import torchvision
 import torch.nn.functional as F
 from PIL import Image
 from torch import nn
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Sampler
 from torchvision.transforms import transforms
 
 
@@ -22,12 +21,11 @@ def denormalize(image):
 
 
 class ImageDataset(Dataset):
-    def __init__(self, images_path, input_size, target_size, apply_transforms=True):
+    def __init__(self, images_path, input_size, target_size, apply_transforms=False):
         super(ImageDataset, self).__init__()
         self.target_size = target_size
-
         self.images = glob.glob(os.path.join(images_path, '*.png'))
-        random.shuffle(self.images)
+        self.images.sort()
 
         self.spatial_transforms = torch.nn.Sequential(
             transforms.RandomHorizontalFlip(p=0.5),
@@ -51,7 +49,8 @@ class ImageDataset(Dataset):
         return len(self.images)
 
     def __getitem__(self, index):
-        image = Image.open(self.images[index]).convert('RGBA')
+        image_path = self.images[index]
+        image = Image.open(image_path).convert('RGBA')
 
         # Convert images to tensors, PIL transforms don't work well with RGBA format because it'll convert to
         # RGBa (premultiplied alpha) when doing resizing and other operations.
@@ -83,4 +82,41 @@ class ImageDataset(Dataset):
         # Change to range [-1, 1]
         image = normalize(image)
 
-        return image, target, unknown_mask
+        return image, target, unknown_mask, image_path
+
+
+class StridedSampler(Sampler):
+    """
+    Samples randomly but with a stride, to get the next image from a sequence at the same position in the next batch
+    """
+    def __init__(self, dataset, stride):
+        super().__init__(dataset)
+        self.dataset = dataset
+        self.stride = stride
+
+    def __iter__(self):
+        dataset_len = len(self.dataset)
+        partition_len = dataset_len // self.stride
+
+        for offset in range(partition_len):
+            for partition in range(self.stride):
+                yield partition_len * partition + offset
+
+    def __len__(self):
+        return len(self.dataset) // self.stride * self.stride
+
+
+def is_next_frame(prev, next):
+    prev_parts = prev.split('.')[0].split('_')
+    next_parts = next.split('.')[0].split('_')
+
+    prev_prefix = '_'.join(prev_parts[0:-1])
+    next_prefix = '_'.join(next_parts[0:-1])
+
+    prev_seqno = prev_parts[-1]
+    next_seqno = next_parts[-1]
+
+    try:
+        return prev_prefix == next_prefix and int(prev_seqno) + 1 == int(next_seqno)
+    except ValueError:
+        return False

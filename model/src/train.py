@@ -16,7 +16,7 @@ from torch.utils.data import RandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from src.dataset import ImageDataset, denormalize
+from src.dataset import ImageDataset, denormalize, StridedSampler, is_next_frame
 from src.model import create_model
 from src.yolov6.solver.build import build_optimizer, build_lr_scheduler
 
@@ -32,6 +32,8 @@ parser.add_argument('--learning-rate', type=float, help='Learning rate', default
 parser.add_argument('--accumulation-steps', type=int, help='Gradient accumulation steps', default=1)
 parser.add_argument('--unknown-mask', action='store_true',
                     help='Mask out the loss from the borders of the object, where the prediction can be uncertain (unknown mask)')
+parser.add_argument('--context-window-steps', type=int, default=1,
+                    help='Number of steps in a sliding context window')
 args = parser.parse_args()
 
 output_dir = os.path.dirname(args.output)
@@ -61,7 +63,11 @@ if args.resume:
     model.load_state_dict(torch.load(args.resume)['state'])
 
 dataset = ImageDataset(args.train, input_size=cfg.model.input_size, target_size=cfg.model.output_size)
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.parallel)
+dataloader = torch.utils.data.DataLoader(
+    dataset,
+    batch_size=args.batch_size,
+    num_workers=(min(args.parallel, 1) if args.context_window_steps > 1 else args.parallel),
+    sampler=StridedSampler(dataset, args.batch_size))
 dataloader = accelerator.prepare(dataloader)
 
 # optimizer = Ranger21(model.parameters(),
@@ -153,11 +159,11 @@ def upsample_like(t, like, mode='bilinear'):
     return t
 
 
-def calculate_loss(outputs, targets, unknown_mask, z_loss=1e-4):
+def calculate_loss(outputs, targets, unknown_masks, z_loss=1e-4):
     alpha_loss = F.binary_cross_entropy_with_logits(outputs, targets, reduction='none')
 
     if args.unknown_mask:
-        loss = (alpha_loss * (1. - unknown_mask)).mean()
+        loss = (alpha_loss * (1. - unknown_masks)).mean()
     else:
         loss = alpha_loss.mean()
 
@@ -174,18 +180,44 @@ last_logged_image = 0
 cuda_available = torch.cuda.is_available()
 
 for epoch in range(args.epochs):
-    # Finetune for last few epochs without using the leaky activations
-    if epoch > (args.epochs * 0.9) and hasattr(model, 'deploy'):
-        model.deploy(finetuning=True)
+    context_window_batches = []
 
-    for inputs, targets, unknown_mask in dataloader:
-        outputs = model(inputs)
+    for batch in dataloader:
+        context_window_batches.append(batch)
 
-        loss, alpha_loss, z_loss = calculate_loss(outputs, targets, unknown_mask)
-        if math.isnan(loss):
-            logger.warning("Loss went to NaN")
+        context = None
+        prev_image_paths = None
+        cumulative_loss = 0.
 
-        accelerator.backward(loss)
+        for ix, (inputs, targets, unknown_masks, image_paths) in enumerate(context_window_batches):
+            context_utilization = 0.
+
+            if context is not None:
+                context_mask = list(1. if is_next_frame(prev_image_paths[i], image_paths[i]) else 0. for i in range(len(image_paths)))
+                context_utilization = sum(context_mask) / len(context_mask)
+                context_mask = torch.tensor(context_mask, dtype=context.dtype, device=context.device, requires_grad=False)
+                outputs = model(inputs, context, context_mask)
+            else:
+                outputs = model(inputs)
+
+            if isinstance(outputs, tuple):
+                outputs, context = outputs
+
+            prev_image_paths = image_paths
+
+            loss, alpha_loss, z_loss = calculate_loss(outputs, targets, unknown_masks)
+            if math.isnan(loss):
+                logger.warning("Loss went to NaN")
+
+            cumulative_loss = cumulative_loss + loss
+
+            writer.add_scalar(f'timestep-loss/loss_step_' + str(ix), loss, step)
+            writer.add_scalar(f'timestep-utilization/context_step_' + str(ix), context_utilization, step)
+
+        while len(context_window_batches) >= args.context_window_steps:
+            context_window_batches.pop(0)
+
+        accelerator.backward(cumulative_loss)
         step += 1
 
         update_optimizer()
@@ -207,11 +239,11 @@ for epoch in range(args.epochs):
 
             input_image = denormalize(inputs[0].detach().cpu())
             output_target = upsample_like(targets[[0]], input_image[0], mode='nearest').detach().cpu()
-            output_unknown_mask = upsample_like(unknown_mask[[0]], input_image[0], mode='nearest').detach().cpu()
+            output_unknown_mask = upsample_like(unknown_masks[[0]], input_image[0], mode='nearest').detach().cpu()
 
             output_loss = upsample_like(normalize_loss(alpha_loss[[0]]), input_image[0], mode='nearest').detach().cpu()
             output_mask = upsample_like(torch.sigmoid(outputs[[0]]), input_image[0], mode='nearest').detach().cpu()
-            output_masked_loss = upsample_like(normalize_loss(alpha_loss[[0]] * (1. - unknown_mask[[0]])), input_image[0], mode='nearest').detach().cpu()
+            output_masked_loss = upsample_like(normalize_loss(alpha_loss[[0]] * (1. - unknown_masks[[0]])), input_image[0], mode='nearest').detach().cpu()
 
             detected_target = upsample_like(model.detect(outputs[[0]]), input_image[0], mode='nearest').detach().cpu()
 

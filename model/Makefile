@@ -12,7 +12,7 @@ INFERENCE_EXTENSION = $(shell echo $(INFERENCE_ENGINE) | sed "s/TINYMAIX/tmdl/" 
 
 # Pretrained FD-MobileNet v1 with depth_multiplier=0.25 with some model surgery to insert a UNet segmentation head into it
 #MODEL ?= fdmobilenet_025_10x6
-MODEL ?= fdmobilenet_025_5x3
+#MODEL ?= fdmobilenet_025_5x3
 
 # Pretrained MobileNet v1 with depth_multiplier=0.25 with some model surgery to insert a UNet segmentation head into it
 # https://github.com/osmr/imgclsmob/tree/master/pytorch (lots of other pretrained models available here too)
@@ -28,10 +28,13 @@ MODEL ?= fdmobilenet_025_5x3
 # Custom models (not pretrained)
 #MODEL ?= mvnet_micro
 #MODEL ?= mvnet_micro_noatt
-#MODEL ?= mvnet_micro_memory
+MODEL ?= mvnet_micro_memory
 
 #MODEL ?= tmnet_micro
 #MODEL ?= yolov6p
+
+# Number of frames in a sliding context window (e.g. for training a model with multiple time-step working memory)
+CONTEXT_WINDOW_STEPS ?= 1
 
 DEPLOY ?= no
 
@@ -130,7 +133,7 @@ $(EXPERIMENT)/coco.pth:
 $(EXPERIMENT)/recorded.pth:# $(COCO_MODEL_PATH)
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) --gradient_accumulation_steps $(REC_ACCUMULATION_STEPS) \
 		src/train.py -m $(MODEL) -p $(PARALLEL) -t dataset/recorded/train -o $@ --epochs $(REC_EPOCHS) --batch-size $(REC_BATCH_SIZE) \
-		--learning-rate $(REC_LEARNING_RATE) --accumulation-steps $(REC_ACCUMULATION_STEPS)
+		--learning-rate $(REC_LEARNING_RATE) --accumulation-steps $(REC_ACCUMULATION_STEPS) --context-window-steps $(CONTEXT_WINDOW_STEPS)
 		#--resume $<
 #--unknown-mask
 
@@ -176,6 +179,9 @@ summary-tflite:
 tensorboard:
 	tensorboard --bind_all --samples_per_plugin images=500 --logdir experiments &
 
+test:
+	./test/run_tests.sh
+
 all: dataset
 
-.PHONY: dataset all
+.PHONY: dataset all test

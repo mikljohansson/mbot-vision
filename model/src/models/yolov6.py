@@ -128,7 +128,7 @@ class YOLOv6Model(nn.Module):
     def detect(self, x):
         return DetectionHead()(x.to('cpu'))
 
-    def deploy(self, finetuning=False):
+    def deploy(self):
         # Fuse batchnorm layers
         fuse_model(self)
 
@@ -138,11 +138,10 @@ class YOLOv6Model(nn.Module):
                 #print(f'Switching {type(layer)} to deployment configuration')
                 layer.switch_to_deploy()
 
-        if not finetuning:
-            # Add the final detection head directly into the model
-            self.out = DetectionHead()
+        # Add the final detection head directly into the model
+        self.out = DetectionHead()
 
-            # Perform activation inplace
-            for m in self.modules():
-                if type(m) in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
-                    m.inplace = True
+        # Perform activation inplace
+        for m in self.modules():
+            if type(m) in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
+                m.inplace = True

@@ -36,14 +36,14 @@ class MLP(nn.Module):
 
 
 class WorkingMemoryContext(object):
-    def __init__(self, cls, mem, prev_timestep_state):
+    def __init__(self, cls, mem, init_state):
         super().__init__()
         self.cls = cls
         self.mem = mem
-        self.prev_timestep_state = prev_timestep_state
+        self.init_state = init_state
 
     def __enter__(self):
-        self.cls.stack.append((self.mem, self.prev_timestep_state))
+        self.cls.stack.append((self.mem, self.init_state))
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -65,8 +65,8 @@ class WorkingMemory(nn.Module):
         super().__init__()
         self.is_enabled = enabled
 
-    def enter(self, prev_timestep_state):
-        return WorkingMemoryContext(WorkingMemory, self, prev_timestep_state)
+    def enter(self, init_state):
+        return WorkingMemoryContext(WorkingMemory, self, init_state)
 
     @staticmethod
     def enabled():
