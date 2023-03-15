@@ -4,7 +4,9 @@ model = dict(
     type=MVNetModel,
     input_size=(80, 48),    # WxH
     output_size=(20, 12),   # WxH
-    attention=False
+    attention=False,
+    memory=False,
+    channels=[3, 6, 6, 12, 24, 48]
 )
 
 solver = dict(

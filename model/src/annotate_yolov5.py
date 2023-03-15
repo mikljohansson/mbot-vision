@@ -1,16 +1,15 @@
 import os
 import glob
 import argparse
-from pathlib import Path
 
 import numpy as np
 import torch
 import tqdm
 from PIL import Image, ImageDraw
 
-from src.image import get_input_box
+from src.image import get_crop_box
 
-parser = argparse.ArgumentParser(description='Summarize adcopy')
+parser = argparse.ArgumentParser(description='Annotate sports balls and other round objects with YOLOv5')
 parser.add_argument('-i', '--input', required=True, help='Directory of images to process')
 parser.add_argument('-a', '--annotated', required=True, help='Directory to store annotated images')
 parser.add_argument('-t', '--train', required=True, help='Directory to store training images')
@@ -45,7 +44,7 @@ for i in range(0, len(files), args.batch_size):
 
         for *xyxy, confidence, clsid in predictions:
             classname = results.names[int(clsid)]
-            if classname not in labels_of_interest or confidence < 0.5:
+            if classname not in labels_of_interest or confidence < 0.25:
                 continue
 
             draw.ellipse(((int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3]))), fill=255)
@@ -54,13 +53,13 @@ for i in range(0, len(files), args.batch_size):
         if not found:
             continue
 
-        box = get_input_box(np.asarray(mask, dtype=np.uint8), args.input_width, args.input_height)
-        image = image.resize((args.input_width, args.input_height), box=box, resample=Image.Resampling.LANCZOS)
-        mask = mask.resize((args.input_width, args.input_height), box=box, resample=Image.Resampling.LANCZOS)
+        # Adjust to the target aspect ratio
+        box = get_crop_box(np.asarray(mask, dtype=np.uint8), args.input_width, args.input_height)
+        image = image.resize((args.input_width, args.input_height), box=box, resample=Image.Resampling.BILINEAR)
+        mask = mask.resize((args.input_width, args.input_height), box=box, resample=Image.Resampling.BILINEAR)
 
         # Show the background with 25% transparency, just for debugging purposes.
         mask = Image.fromarray(np.maximum(np.asarray(mask, dtype=np.uint8), 64), 'L')
-
         image = Image.merge('RGBA', (*image.split(), *mask.split()))
 
         targetname = os.path.join(args.train, os.path.splitext(os.path.basename(filename))[0] + '.png')

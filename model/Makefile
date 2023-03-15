@@ -10,11 +10,11 @@ INFERENCE_EXTENSION = $(shell echo $(INFERENCE_ENGINE) | sed "s/TINYMAIX/tmdl/" 
 # See this link for lots of pretrained models
 # https://github.com/osmr/imgclsmob/tree/master/pytorch
 
-# Pretrained FD-MobileNet v1 with depth_multiplier=0.25 and different resolutions at the bottom-most level
+# Pretrained FD-MobileNet v1 with depth_multiplier=0.25 with some model surgery to insert a UNet segmentation head into it
 #MODEL ?= fdmobilenet_025_10x6
 MODEL ?= fdmobilenet_025_5x3
 
-# Pretrained MobileNet v1 with depth_multiplier=0.25 and different resolutions at the bottom-most level
+# Pretrained MobileNet v1 with depth_multiplier=0.25 with some model surgery to insert a UNet segmentation head into it
 # https://github.com/osmr/imgclsmob/tree/master/pytorch (lots of other pretrained models available here too)
 #MODEL ?= mobilenet_v1_025_10x6
 #MODEL ?= mobilenet_v1_025_5x3
@@ -28,9 +28,7 @@ MODEL ?= fdmobilenet_025_5x3
 # Custom models (not pretrained)
 #MODEL ?= mvnet_micro
 #MODEL ?= mvnet_micro_noatt
-
-#MODEL ?= vmnet_micro
-#MODEL ?= vmnet_micro_nomem
+#MODEL ?= mvnet_micro_memory
 
 #MODEL ?= tmnet_micro
 #MODEL ?= yolov6p
@@ -49,8 +47,17 @@ OUTPUT_HEIGHT = 12
 #MEMORY_FORMAT = CHANNELS_FIRST
 MEMORY_FORMAT = CHANNELS_LAST
 
-# Batch size used for YOLOv5 when annotating your recorded data, you might need to lower this if your GPU runs out of memory
-YOLO_BATCH_SIZE ?= 32
+# This teacher/annotator can only do round/elliptical objects, e.g. sport balls and oranges
+TEACHER_MODEL = yolov5
+
+# This teacher/annotator can handle any COCO object type and uses YOLOv5 for image segmentation, but the edges of the masks aren't perfect
+#TEACHER_MODEL = yolov5_seg
+
+# This teacher/annotator can handle any COCO object type and uses YOLOv5 for image segmentation, but the aspect ratio of the output masks from this model is incorrect for some reason
+#TEACHER_MODEL = yolov8_seg
+
+# Batch size used when annotating your recorded data, you might need to lower this if your GPU runs out of memory
+TEACHER_BATCH_SIZE ?= 32
 
 # Hyperparams for the pre-training on MS COCO images
 # - YOLOv6 trains with total batch size 64-256 for 500k-2M optimization steps (400 epochs) on COCO dataset (328k images, 80 classes)
@@ -97,17 +104,17 @@ dataset/recorded/frames: $(addprefix dataset/recorded/frames/,$(addsuffix _00000
 	touch $(dir $@)
 
 # Annotate all images and frames
-dataset/recorded/train: src/annotate.py src/image.py dataset/recorded/frames $(shell find dataset/recorded/images -type f)
+dataset/recorded/train: src/annotate_$(TEACHER_MODEL).py src/image.py dataset/recorded/frames $(shell find dataset/recorded/images -type f)
 	mkdir -p dataset/recorded/annotated
 	mkdir -p dataset/recorded/train
 
-	PYTHONPATH=. python src/annotate.py -c "$(CLASSES)" \
+	PYTHONPATH=. python src/annotate_$(TEACHER_MODEL).py -c "$(CLASSES)" \
 		-i dataset/recorded/images -a dataset/recorded/annotated -t dataset/recorded/train \
-		--input-width $(INPUT_WIDTH) --input-height $(INPUT_HEIGHT) --batch-size $(YOLO_BATCH_SIZE)
+		--input-width $(INPUT_WIDTH) --input-height $(INPUT_HEIGHT) --batch-size $(TEACHER_BATCH_SIZE)
 
-	PYTHONPATH=. python src/annotate.py -c "$(CLASSES)" \
+	PYTHONPATH=. python src/annotate_$(TEACHER_MODEL).py -c "$(CLASSES)" \
 		-i dataset/recorded/frames -a dataset/recorded/annotated -t dataset/recorded/train \
-		--input-width $(INPUT_WIDTH) --input-height $(INPUT_HEIGHT) --batch-size $(YOLO_BATCH_SIZE)
+		--input-width $(INPUT_WIDTH) --input-height $(INPUT_HEIGHT) --batch-size $(TEACHER_BATCH_SIZE)
 
 	touch dataset/recorded/train
 

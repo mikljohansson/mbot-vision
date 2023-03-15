@@ -1,12 +1,14 @@
+import math
 import random
 
 import numpy as np
+import torchvision
 
 
-def get_input_box(mask, target_width, target_height):
+def get_crop_box(mask, target_width, target_height):
     # Mask is HxW format
     height, width = mask.shape
-    
+
     # https://stackoverflow.com/a/4744625
     input_aspect = float(width) / float(height)
     target_aspect = float(target_width) / float(target_height)
@@ -27,6 +29,19 @@ def get_input_box(mask, target_width, target_height):
            max(int(box[1]), 0),
            min(int(box[2]), width - 1),
            min(int(box[3]), height - 1))
+
+    return box
+
+
+def get_zoom_box(mask, target_width, target_height):
+    box = get_crop_box(mask, target_width, target_height)
+
+    # Mask is HxW format
+    height, width = mask.shape
+
+    # https://stackoverflow.com/a/4744625
+    input_aspect = float(width) / float(height)
+    target_aspect = float(target_width) / float(target_height)
 
     # Zoom in on the region of interest if needed
     cropped_mask = mask[box[1]:box[3], box[0]:box[2]]
@@ -83,3 +98,18 @@ def get_input_box(mask, target_width, target_height):
            min(int(box[3]), height - 1))
 
     return box
+
+
+def square_pad(image, min_size=0, fill=0., extra_padding=0):
+    h, w = image.shape[-2:]
+    max_wh = max(w, h, min_size)
+
+    hp = (max_wh - w) / 2.
+    vp = (max_wh - h) / 2.
+
+    # extra_padding is used to avoid artifacts when objects and shadows are right up to the edge of the image
+    hp += extra_padding
+    vp += extra_padding
+
+    padding = (math.ceil(hp), math.ceil(vp), math.floor(hp), math.floor(vp))
+    return torchvision.transforms.functional.pad(image, padding, fill, 'constant'), padding

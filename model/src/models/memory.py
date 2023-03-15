@@ -16,8 +16,9 @@ def prod(x):
 
 
 class MLP(nn.Module):
-    def __init__(self, in_ch, mid_ch, out_ch, eps=1e-3):
+    def __init__(self, in_ch, out_ch, eps=1e-3):
         super().__init__()
+        mid_ch = out_ch * 2
         self.eps = eps
         self.in_conv = nn.Conv2d(in_ch, mid_ch, kernel_size=1)
         self.act = nn.ReLU()
@@ -99,7 +100,7 @@ class WorkingMemoryQuery(nn.Module):
         self.reshape_like_input = reshape_like_input
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.maxpool = nn.AdaptiveMaxPool2d(1)
-        self.query_proj = MLP(in_ch * 2 + WorkingMemory.mem_ch, out_ch * 2, out_ch)
+        self.query_proj = MLP(in_ch * 2 + WorkingMemory.mem_ch, out_ch)
 
     def zero_init(self):
         self.query_proj.zero_init()
@@ -133,7 +134,7 @@ class WorkingMemoryUpdate(nn.Module):
         super().__init__()
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.maxpool = nn.AdaptiveMaxPool2d(1)
-        self.update_proj = MLP(in_ch * 2 + WorkingMemory.mem_ch, WorkingMemory.mem_ch * 2, WorkingMemory.mem_ch)
+        self.update_proj = MLP(in_ch * 2 + WorkingMemory.mem_ch, WorkingMemory.mem_ch)
 
     def forward(self, x):
         if not WorkingMemory.enabled():

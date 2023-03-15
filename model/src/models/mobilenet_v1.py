@@ -49,6 +49,7 @@ class SegmentationNeck(nn.ModuleList):
 
         return x
 
+
 class CaptureTensor(nn.Module):
     def __init__(self, captures):
         super().__init__()
@@ -61,7 +62,7 @@ class CaptureTensor(nn.Module):
 
 class MobileNetSegmentV1(nn.Module):
     """
-    Based on MobileNet v1 with an image segmentation head and same config as the tflite-micro "person detection" example
+    Based on MobileNet v1 retrofitted with an UNet-like image segmentation head
     https://github.com/tensorflow/tflite-micro/blob/main/tensorflow/lite/micro/examples/person_detection/training_a_model.md
     """
     def __init__(self, config):

@@ -1,9 +1,12 @@
+import math
+
 import torch
 
 from torch import nn
 from einops import einsum
 
 from src.models.detection import DetectionHead
+from src.models.memory import WorkingMemory, WorkingMemoryConv2d, WorkingMemoryUpdate, WorkingMemoryQuery
 
 
 class ResidualBlock(nn.Sequential):
@@ -85,7 +88,7 @@ class UpsampleConv(nn.Sequential):
         super().__init__(
             nn.Conv2d(in_ch, in_ch, kernel_size=1),
             nn.UpsamplingNearest2d(size=size, scale_factor=scale_factor),
-            nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, padding=1, groups=out_ch),
+            nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, padding=1, groups=math.gcd(in_ch, out_ch), bias=False),
             nn.BatchNorm2d(out_ch),
         )
 
@@ -103,19 +106,42 @@ class DownsampleBilinear2d(nn.UpsamplingBilinear2d):
 class DownsampleConv(nn.Sequential):
     def __init__(self, in_ch, out_ch, kernel_size=3, stride=2):
         super().__init__(
-            nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, padding=((kernel_size - 1) // 2), groups=in_ch, stride=stride),
+            nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, padding=((kernel_size - 1) // 2), groups=math.gcd(in_ch, out_ch), stride=stride, bias=False),
             nn.Conv2d(out_ch, out_ch, kernel_size=1),
             nn.BatchNorm2d(out_ch),
         )
 
 
 class ConvNormAct(nn.Sequential):
-    def __init__(self, in_ch, out_ch, kernel_size, attention=False, **kwargs):
+    def __init__(self, in_ch, out_ch, kernel_size, attention=False, memory=False, **kwargs):
+        conv = WorkingMemoryConv2d if memory else nn.Conv2d
         super().__init__(
-            nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, **kwargs),
+            conv(in_ch, out_ch, kernel_size=kernel_size, padding=((kernel_size - 1) // 2), **kwargs),
             nn.BatchNorm2d(out_ch),
             BiasedSqueezeAndExcitation(out_ch) if attention else nn.Identity(),
             nn.ReLU(),
+        )
+
+
+class DWConvNormAct(nn.Sequential):
+    def __init__(self, in_ch, out_ch, kernel_size, attention=False, **kwargs):
+        super().__init__(
+            nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, padding=((kernel_size - 1) // 2), groups=math.gcd(in_ch, out_ch), **kwargs),
+            nn.Conv2d(out_ch, out_ch, kernel_size=1),
+            nn.BatchNorm2d(out_ch),
+            BiasedSqueezeAndExcitation(out_ch) if attention else nn.Identity(),
+            nn.ReLU(),
+        )
+
+
+class MobileNet3Block(ResidualBlock):
+    def __init__(self, in_ch, out_ch, kernel_size, attention=False, expansion_ratio=4.):
+        mid_ch = max(int(in_ch * expansion_ratio), 4)
+        super().__init__(
+            ConvNormAct(in_ch, mid_ch, kernel_size=1),
+            ConvNormAct(mid_ch, mid_ch, kernel_size=kernel_size, attention=attention, groups=mid_ch),
+            nn.Conv2d(mid_ch, out_ch, kernel_size=1),
+            nn.BatchNorm2d(out_ch),
         )
 
 
@@ -163,7 +189,8 @@ class BiasedSqueezeAndExcitation(nn.Module):
 
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.maxpool = nn.AdaptiveMaxPool2d(1)
-        self.conv_map = nn.Conv2d(in_ch * 2, mid_ch, kernel_size=1)
+        self.memory = WorkingMemoryQuery(in_ch, in_ch) if WorkingMemory.enabled() else None
+        self.conv_map = nn.Conv2d(in_ch * 3 if self.memory is not None else in_ch * 2, mid_ch, kernel_size=1)
         self.mid_act = nn.ReLU()
         self.conv_bias = nn.Conv2d(mid_ch, out_ch, kernel_size=1)
         self.conv_mul = nn.Conv2d(mid_ch, out_ch, kernel_size=1)
@@ -173,7 +200,12 @@ class BiasedSqueezeAndExcitation(nn.Module):
         # Downsample to B, C*3, 1, 1
         y1 = self.avgpool(x)
         y2 = self.maxpool(x)
-        y = torch.cat([y1, y2], dim=1)
+
+        if self.memory is not None:
+            y3 = self.memory(x)
+            y = torch.cat([y1, y2, y3], dim=1)
+        else:
+            y = torch.cat([y1, y2], dim=1)
 
         y = self.conv_map(y)
         y = self.mid_act(y)
@@ -384,30 +416,31 @@ class ConvNeXt(nn.Sequential):
 
 class SpatialPyramidPool(nn.Module):
     """
-    Mix of SPP and ConvNeXt with optional channel attention
+    Mix of SPP and ConvNeXt with optional channel and spatial attention
     """
     def __init__(self, in_ch, attention=True, channel_add=False):
         super().__init__()
         self.channel_add = channel_add
         self.in_ch = in_ch
-        mid_ch = max(in_ch // 2, 4)
+        self.mid_ch = max(in_ch // 2, 4)
+        out_ch = in_ch * 2 if not channel_add else self.mid_ch
 
-        self.convin = nn.Conv2d(in_ch, mid_ch, kernel_size=3, padding=1, groups=min(in_ch, mid_ch))
+        self.convin = nn.Conv2d(in_ch, self.mid_ch, kernel_size=3, padding=1, groups=math.gcd(in_ch, self.mid_ch))
         self.pool1 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
         self.pool2 = nn.MaxPool2d(kernel_size=5, stride=1, padding=2)
         self.pool3 = nn.MaxPool2d(kernel_size=7, stride=1, padding=3)
 
-        self.att1 = BiasedSqueezeAndExcitation(mid_ch * 4) if attention else nn.Identity()
-        self.norm = nn.BatchNorm2d(mid_ch * 4)
+        self.att1 = BiasedSqueezeAndExcitation(self.mid_ch * 4) if attention else nn.Identity()
+        self.norm = nn.BatchNorm2d(self.mid_ch * 4)
 
         #self.shuffle = ChannelShuffle(4)
-        #self.convmid = nn.Conv2d(mid_ch * 4, in_ch, kernel_size=1, groups=4)
+        #self.convmid = nn.Conv2d(mid_ch * 4, in_ch, kernel_size=1, groups=4) if not channel_add else nn.Identity()
         self.shuffle = nn.Identity()
-        self.convmid = nn.Conv2d(mid_ch * 4, in_ch, kernel_size=1)
+        self.convmid = nn.Conv2d(self.mid_ch * 4, out_ch, kernel_size=1) if not channel_add else nn.Identity()
 
-        self.att2 = ChannelAndSpatialAttention(in_ch) if attention else nn.Identity()
+        self.att2 = ChannelAndSpatialAttention(out_ch) if attention else nn.Identity()
         self.act = nn.ReLU()
-        self.convout = nn.Conv2d(in_ch, in_ch, kernel_size=1)
+        self.convout = nn.Conv2d(out_ch, in_ch, kernel_size=1)
 
     def forward(self, x):
         y1 = self.convin(x)
@@ -420,10 +453,10 @@ class SpatialPyramidPool(nn.Module):
         y = self.norm(y)
 
         if self.channel_add:
-            y = y[:, 0:self.in_ch] + \
-                y[:, self.in_ch:(self.in_ch * 2)] + \
-                y[:, (self.in_ch * 2):(self.in_ch * 3)] + \
-                y[:, (self.in_ch * 3):(self.in_ch * 4)]
+            y = y[:, 0:self.mid_ch] + \
+                y[:, self.mid_ch:(self.mid_ch * 2)] + \
+                y[:, (self.mid_ch * 2):(self.mid_ch * 3)] + \
+                y[:, (self.mid_ch * 3):(self.mid_ch * 4)]
         else:
             y = self.shuffle(y)
             y = self.convmid(y)
@@ -442,7 +475,7 @@ class SSPF(nn.Module):
         super().__init__()
         mid_ch = in_ch // 2
 
-        self.convin = ConvNormAct(in_ch, mid_ch, kernel_size=1, attention=attention)
+        self.convin = ConvNormAct(in_ch, mid_ch, kernel_size=1)
         self.pool = nn.MaxPool2d(kernel_size=5, stride=1, padding=2)
         self.att = BiasedSqueezeAndExcitation(mid_ch * 4) if attention else nn.Identity()
         self.convout = nn.Conv2d(mid_ch * 4, out_ch, kernel_size=1)
@@ -462,57 +495,71 @@ class SSPF(nn.Module):
 
 class MVNetModel(nn.Module):
     """
-    UNet-like model with addition of spatial pyramid pooling and channel and block attention
+    UNet-like image segmentation model with addition of
+     - Spatial pyramid pooling
+     - Optional channel-and-spatial attention
+     - Optional cross time-step working memory
     """
     def __init__(self, config):
         super().__init__()
+        channels = config.channels
+        memory = config.memory
 
-        self.backbone = nn.Sequential(
-            # 80x60 input
-            nn.Conv2d(3, 4, kernel_size=1),
-            nn.BatchNorm2d(4),
+        self.memory = WorkingMemory(enabled=memory)
 
-            # 40x30
-            DownsampleConv(4, 4),
-            SpatialPyramidPool(4, attention=config.attention),
+        # Let attention modules know about the working memory being enabled/disabled
+        with self.memory.enter(None) as ctx:
+            self.backbone = nn.Sequential(
+                # 80x48 input
+                WorkingMemoryConv2d(channels[0], channels[1], kernel_size=1) if memory else nn.Identity(),
 
-            # 20x15
-            DownsampleConv(4, 8),
-            SpatialPyramidPool(8, attention=config.attention),
+                # 40x24
+                ConvNormAct(channels[1], channels[2], kernel_size=3, stride=2, bias=False, memory=memory),
 
-            DenseBlock(
-                # 10x8
-                DownsampleConv(8, 16),
-                ConvNeXt(16, expansion_ratio=2, groups=4, attention=config.attention),
+                # 20x12
+                DWConvNormAct(channels[2], channels[3], kernel_size=3, stride=2, bias=False, attention=config.attention),
+                SpatialPyramidPool(channels[3], attention=config.attention),
+
+                DWConvNormAct(channels[3], channels[3], kernel_size=3, attention=config.attention),
+                SpatialPyramidPool(channels[3], attention=config.attention, channel_add=True),
 
                 DenseBlock(
-                    # 5x4
-                    DownsampleConv(16, 16),
+                    # 10x6
+                    DownsampleConv(channels[3], channels[4]),
 
-                    ConvNeXt(16, expansion_ratio=2, groups=4, attention=config.attention),
-                    nn.Conv2d(16, 16, kernel_size=1),
-                    ConvNeXt(16, expansion_ratio=2, groups=4, attention=config.attention),
+                    ConvNeXt(channels[4], expansion_ratio=2, groups=4, attention=config.attention),
 
-                    # 10x8
-                    UpsampleConv(16, 16, scale_factor=2)
+                    DenseBlock(
+                        # 5x3
+                        DownsampleConv(channels[4], channels[5]),
+
+                        ConvNeXt(channels[5], expansion_ratio=2, groups=4, attention=config.attention),
+                        nn.Conv2d(channels[5], channels[5], kernel_size=1),
+                        ConvNeXt(channels[5], expansion_ratio=2, groups=4, attention=config.attention),
+
+                        WorkingMemoryUpdate(channels[5]) if memory else nn.Identity(),
+
+                        # 10x6
+                        UpsampleConv(channels[5], channels[4], scale_factor=2)
+                    ),
+
+                    WorkingMemoryUpdate(channels[4] * 2) if memory else nn.Identity(),
+
+                    # 20x12
+                    UpsampleConv(channels[4] * 2, channels[3], scale_factor=2)
                 ),
 
-                ConvNormAct(32, 16, kernel_size=1, attention=config.attention),
-                ConvNeXt(16, expansion_ratio=2, groups=4, attention=config.attention),
-
-                # 20x15
-                UpsampleConv(16, 8, scale_factor=2)
-            ),
-
-            SSPF(16, 1, attention=config.attention)
-        )
+                WorkingMemoryUpdate(channels[3] * 2) if memory else nn.Identity(),
+                SSPF(channels[3] * 2, 1, attention=config.attention)
+            )
 
         self.head = nn.Identity()
 
-    def forward(self, x):
-        x = self.backbone(x)
-        x = self.head(x)
-        return x
+    def forward(self, x, prev_timestep_state=None):
+        with self.memory.enter(prev_timestep_state) as ctx:
+            x = self.backbone(x)
+            x = self.head(x)
+            return x#, ctx.get()
 
     def detect(self, x):
         return DetectionHead()(x.to('cpu'))

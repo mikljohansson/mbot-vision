@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 import fiftyone.zoo as foz
 
-from src.image import get_input_box
+from src.image import get_crop_box
 
 parser = argparse.ArgumentParser(description='Summarize adcopy')
 parser.add_argument('-c', '--classes', required=True, help='Comma separated list of classes of interest')
@@ -59,7 +59,7 @@ def render_sample(sample, classes, positive_sample=True):
     if not found_roi:
         return False
 
-    box = get_input_box(mask, args.input_width, args.input_height)
+    box = get_crop_box(mask, args.input_width, args.input_height)
     mask = Image.fromarray(np.minimum(mask, 255), 'L')
 
     assert image.width == mask.width and image.height == mask.height
