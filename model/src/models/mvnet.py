@@ -514,7 +514,7 @@ class MVNetModel(nn.Module):
                 WorkingMemoryConv2d(channels[0], channels[1], kernel_size=1) if memory else nn.Identity(),
 
                 # 40x24
-                ConvNormAct(channels[1], channels[2], kernel_size=3, stride=2, bias=False, memory=memory),
+                ConvNormAct(channels[1 if memory else 0], channels[2], kernel_size=3, stride=2, bias=False, memory=memory),
 
                 # 20x12
                 DWConvNormAct(channels[2], channels[3], kernel_size=3, stride=2, bias=False, attention=config.attention),
