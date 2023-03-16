@@ -67,7 +67,9 @@ dataloader = torch.utils.data.DataLoader(
     dataset,
     batch_size=args.batch_size,
     num_workers=(min(args.parallel, 1) if args.context_window_steps > 1 else args.parallel),
-    sampler=StridedSampler(dataset, args.batch_size))
+    shuffle=True,
+    #sampler=StridedSampler(dataset, args.batch_size)
+)
 dataloader = accelerator.prepare(dataloader)
 
 # optimizer = Ranger21(model.parameters(),
@@ -209,7 +211,8 @@ for epoch in range(args.epochs):
             if math.isnan(loss):
                 logger.warning("Loss went to NaN")
 
-            cumulative_loss = cumulative_loss + loss
+            #cumulative_loss = cumulative_loss + loss
+            cumulative_loss = loss
 
             writer.add_scalar(f'timestep-loss/loss_step_' + str(ix), loss, step)
             writer.add_scalar(f'timestep-utilization/context_step_' + str(ix), context_utilization, step)

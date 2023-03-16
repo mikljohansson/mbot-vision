@@ -12,7 +12,7 @@ INFERENCE_EXTENSION = $(shell echo $(INFERENCE_ENGINE) | sed "s/TINYMAIX/tmdl/" 
 
 # Pretrained FD-MobileNet v1 with depth_multiplier=0.25 with some model surgery to insert a UNet segmentation head into it
 #MODEL ?= fdmobilenet_025_10x6
-#MODEL ?= fdmobilenet_025_5x3
+MODEL ?= fdmobilenet_025_5x3
 
 # Pretrained MobileNet v1 with depth_multiplier=0.25 with some model surgery to insert a UNet segmentation head into it
 # https://github.com/osmr/imgclsmob/tree/master/pytorch (lots of other pretrained models available here too)
@@ -28,7 +28,7 @@ INFERENCE_EXTENSION = $(shell echo $(INFERENCE_ENGINE) | sed "s/TINYMAIX/tmdl/" 
 # Custom models (not pretrained)
 #MODEL ?= mvnet_micro
 #MODEL ?= mvnet_micro_noatt
-MODEL ?= mvnet_micro_memory
+#MODEL ?= mvnet_micro_memory
 
 #MODEL ?= tmnet_micro
 #MODEL ?= yolov6p
@@ -97,10 +97,10 @@ dataset/coco/train: src/coco.py src/image.py
 		--input-width $(INPUT_WIDTH) --input-height $(INPUT_HEIGHT) --max-sample-count $(COCO_MAX_SAMPLE_COUNT)
 	touch dataset/coco/train
 
-# Extract 2 frames per second from a video
+# Extract 5 frames per second from a video
 dataset/recorded/frames/%_000001.jpg: dataset/recorded/videos/%.mp4
 	mkdir -p $(dir $@)
-	ffmpeg -i $< -r 4 $(dir $@)/$(basename $(notdir $<))_%06d.jpg
+	ffmpeg -i $< -r 5 $(dir $@)/$(basename $(notdir $<))_%06d.jpg
 
 # Extract frames from all videos
 dataset/recorded/frames: $(addprefix dataset/recorded/frames/,$(addsuffix _000001.jpg,$(basename $(notdir $(shell find dataset/recorded/videos -type f)))))

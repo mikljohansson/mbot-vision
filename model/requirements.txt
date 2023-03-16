@@ -13,6 +13,7 @@ git+https://github.com/onnx/onnx-tensorflow.git
 opencv-python
 tflite
 scipy
+yolov5
 ultralytics
 einops
 pytorchcv

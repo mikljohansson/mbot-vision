@@ -21,7 +21,7 @@ def denormalize(image):
 
 
 class ImageDataset(Dataset):
-    def __init__(self, images_path, input_size, target_size, apply_transforms=False):
+    def __init__(self, images_path, input_size, target_size, apply_transforms=True):
         super(ImageDataset, self).__init__()
         self.target_size = target_size
         self.images = glob.glob(os.path.join(images_path, '*.png'))
