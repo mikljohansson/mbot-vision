@@ -177,7 +177,7 @@ summary-tflite:
 
 # Start tensorboard in the background
 tensorboard:
-	tensorboard --bind_all --samples_per_plugin images=500 --logdir experiments &
+	CUDA_VISIBLE_DEVICES= tensorboard --bind_all --samples_per_plugin images=500 --logdir experiments &
 
 test:
 	./test/run_tests.sh

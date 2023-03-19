@@ -33,7 +33,7 @@ dataset = ImageDataset(args.dataset, input_size=cfg.model.input_size, target_siz
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
 
 # Convert to ONNX
-inputs, _, _ = next(iter(dataloader))
+inputs, _, _, _ = next(iter(dataloader))
 onnx_model_path = os.path.splitext(args.model)[0] + '.onnx'
 torch.onnx.export(model, inputs, onnx_model_path + '.int64',
                   opset_version=12, export_params=True, verbose=False,
@@ -62,7 +62,7 @@ if args.channels_last:
         step = 0
         images = []
 
-        for inputs, _, _ in dataloader:
+        for inputs, _, _, _ in dataloader:
             # get sample input data as numpy array
             images.append(np.moveaxis(inputs.numpy(), 1, 3))
 
@@ -94,7 +94,7 @@ else:
     # Convert to TFlite
     def representative_dataset_gen():
         step = 0
-        for inputs, _, _ in dataloader:
+        for inputs, _, _, _ in dataloader:
             # get sample input data as numpy array
             yield {'input': tf.dtypes.cast(inputs.numpy(), tf.float32)}
 
