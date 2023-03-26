@@ -68,7 +68,7 @@ TEACHER_BATCH_SIZE ?= 32
 COCO_EPOCHS ?= 100
 COCO_BATCH_SIZE ?= 64
 COCO_ACCUMULATION_STEPS ?= 1
-COCO_LEARNING_RATE ?= 1e-4
+COCO_LEARNING_RATE ?= 3e-4
 COCO_MODEL_PATH ?= $(EXPERIMENT)/coco.pth
 COCO_MAX_SAMPLE_COUNT ?= 25000
 
@@ -77,7 +77,7 @@ COCO_MAX_SAMPLE_COUNT ?= 25000
 REC_EPOCHS ?= 300
 REC_BATCH_SIZE ?= 64
 REC_ACCUMULATION_STEPS ?= 1
-REC_LEARNING_RATE ?= 5e-4
+REC_LEARNING_RATE ?= 1e-3
 
 PARALLEL ?= $(shell grep -c ^processor /proc/cpuinfo)
 GPU_COUNT ?= $(shell if [ "${CUDA_VISIBLE_DEVICES}" != "" ]; then echo "${CUDA_VISIBLE_DEVICES}" | tr "," " "| wc -w; else nvidia-smi --query-gpu=name --format=csv,noheader | grep -v -e '^$$' | wc -l; fi)
