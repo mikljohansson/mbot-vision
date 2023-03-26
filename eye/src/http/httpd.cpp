@@ -15,6 +15,7 @@ static Detector *detector;
 
 esp_err_t handleIndex(httpd_req_t *req) {
     Serial.println("Sending index.html");
+    httpd_resp_set_hdr(req, "Connection", "close");
     return httpd_resp_sendstr(req, indexDocument.c_str());
 }
 
@@ -28,6 +29,8 @@ httpd_uri_t uri_index = {
 
 
 esp_err_t handleFlash(httpd_req_t *req) {
+    httpd_resp_set_hdr(req, "Connection", "close");
+    
     size_t buf_len = httpd_req_get_url_query_len(req) + 1;
     char variable[32] = {0,};
     
@@ -72,6 +75,21 @@ httpd_uri_t uri_flash = {
 
 
 
+esp_err_t handleToggleDetectorStream(httpd_req_t *req) {
+    Serial.println("Toggling model output stream");
+    JpegStream::toggleDetectorStream();
+    httpd_resp_set_hdr(req, "Connection", "close");
+    return httpd_resp_sendstr(req, "OK");
+}
+
+httpd_uri_t uri_toggle_detector_stream = {
+    .uri      = "/toggleDetectorStream",
+    .method   = HTTP_POST,
+    .handler  = handleToggleDetectorStream,
+    .user_ctx = NULL
+};
+
+
 void runJpegStream(void *p) {
     JpegStream *stream = (JpegStream *)p;
     stream->run();
@@ -81,7 +99,7 @@ void runJpegStream(void *p) {
 
 esp_err_t handleJpegStream(httpd_req_t *req) {
     Serial.println("MJPEG stream connected");
-    JpegStream *stream = new JpegStream(req, false, *detector);
+    JpegStream *stream = new JpegStream(req, *detector);
 
     TaskHandle_t task;
     xTaskCreatePinnedToCore(runJpegStream, "jpegStream", 4096, stream, 1, &task, 0);
@@ -93,23 +111,6 @@ httpd_uri_t uri_stream = {
     .uri      = "/stream",
     .method   = HTTP_GET,
     .handler  = handleJpegStream,
-    .user_ctx = NULL
-};
-
-esp_err_t handleDetectorStream(httpd_req_t *req) {
-    Serial.println("MJPEG model output stream connected");
-    JpegStream *stream = new JpegStream(req, true, *detector);
-
-    TaskHandle_t task;
-    xTaskCreatePinnedToCore(runJpegStream, "detectorStream", 4096, stream, 1, &task, 0);
-
-    return ESP_OK;
-}
-
-httpd_uri_t uri_detector = {
-    .uri      = "/detector",
-    .method   = HTTP_GET,
-    .handler  = handleDetectorStream,
     .user_ctx = NULL
 };
 
@@ -127,7 +128,7 @@ esp_err_t handleEventStream(httpd_req_t *req) {
     EventStream *stream = new EventStream(req, *detector);
 
     TaskHandle_t task;
-    xTaskCreatePinnedToCore(runEventStream, "eventStream", 4096, stream, 2, &task, 0);
+    xTaskCreatePinnedToCore(runEventStream, "eventStream", 4096, stream, 1, &task, 0);
     
     return ESP_OK;
 }
@@ -154,8 +155,8 @@ void httpdRun(Detector &d) {
     if (httpd_start(&server, &config) == ESP_OK) {
         httpd_register_uri_handler(server, &uri_index);
         httpd_register_uri_handler(server, &uri_flash);
+        httpd_register_uri_handler(server, &uri_toggle_detector_stream);
         httpd_register_uri_handler(server, &uri_stream);
-        httpd_register_uri_handler(server, &uri_detector);
         httpd_register_uri_handler(server, &uri_events);
     }
 }

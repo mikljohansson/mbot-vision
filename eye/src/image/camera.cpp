@@ -45,7 +45,7 @@ camera_config_t mv_camera_aithinker_config {
     //.frame_size = FRAMESIZE_QVGA,
     .frame_size = FRAMESIZE_VGA,
     .jpeg_quality = 40, //0-63 lower numbers are higher quality
-    .fb_count = 3       // if more than one i2s runs in continous mode.  Use only with jpeg
+    .fb_count = 2       // if more than one i2s runs in continous mode.  Use only with jpeg
 };
 
 FrameBufferQueue::FrameBufferQueue() {
@@ -215,5 +215,5 @@ Camera::Camera(DataLogger &logger)
 
 void Camera::begin() {
     fbqueue = new FrameBufferQueue();
-    xTaskCreatePinnedToCore(runStatic, "camera", 10000, this, 3, &cameraTask, 0);
+    xTaskCreatePinnedToCore(runStatic, "camera", 10000, this, 1, &cameraTask, 0);
 }

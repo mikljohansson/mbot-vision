@@ -2,9 +2,15 @@
 
 #include <memory>
 
-JpegStream::JpegStream(httpd_req_t *request, bool showDetector, Detector &detector)
+static volatile bool showDetectorStream = false;
+
+JpegStream::JpegStream(httpd_req_t *request, Detector &detector)
  : AsyncStream(request), 
-   _framerate("MJPEG stream framerate: %02f\n"), _showDetector(showDetector), _detector(detector), _disconnected(false) {}
+   _framerate("MJPEG stream framerate: %02f\n"), _detector(detector), _disconnected(false) {}
+
+void JpegStream::toggleDetectorStream() {
+    showDetectorStream = !showDetectorStream;
+}
 
 void JpegStream::run() {
     Serial.println("Starting MJPEG stream");
@@ -22,14 +28,14 @@ void JpegStream::run() {
 
         String headers = "\r\n--gc0p4Jq0M2Yt08jU534c0p\r\n";
 
-        if (!_showDetector) {
+        if (!showDetectorStream) {
             headers += "Content-Type: image/jpeg\r\n";
         }
         else {
             headers += "Content-Type: image/bmp\r\n";
         }
 
-        if (fb.frame->format == PIXFORMAT_JPEG && !_showDetector) {
+        if (fb.frame->format == PIXFORMAT_JPEG && !showDetectorStream) {
             headers += "Content-Length: ";
             headers += fb.frame->len;
             headers += "\r\n";
@@ -43,7 +49,7 @@ void JpegStream::run() {
         }
 
         if (fb.frame->format == PIXFORMAT_JPEG) {
-            if (_showDetector) {
+            if (showDetectorStream) {
                 if (!decoder) {
                     decoder.reset(new JpegDecoder());
                 }

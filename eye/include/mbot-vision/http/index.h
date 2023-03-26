@@ -56,15 +56,8 @@ String indexDocument = R"doc(<html>
           };
         }
 
-        const handleDebug = () => {
-          const container = document.getElementById("container");
-          
-          // Need to call stop() to stop loading the MJPEG stream, and need to reconnect the crosshair event stream
-          window.stop();
-          source.close();
-
-          connectEvents();
-          container.style.backgroundImage = container.style.backgroundImage.includes("detector") ? "url('/stream')" : "url('/detector')";
+        const handleToggleDetectorStream = () => {
+          post(`/toggleDetectorStream`);
         };
 
         const handleLoad = () => {
@@ -125,7 +118,7 @@ String indexDocument = R"doc(<html>
       <table>
         <td class="button" onClick="javascript:handleFlashToggle();">&#x1F4A1;</td>
         <td class="inputcell"><input type="range" min="0" max="175" value="0" id="flash" oninput="handleFlash(this.value);" onchange="handleFlash(this.value);"></td>
-        <td class="button" style="color: #999;" onClick="javascript:handleDebug();">&#x267B;</td>
+        <td class="button" style="color: #999;" onClick="javascript:handleToggleDetectorStream();">&#x267B;</td>
       </table>
     </div>
     <div class="container detector" />

@@ -13,14 +13,15 @@ class JpegStream : public AsyncStream {
     private:
         TaskHandle_t _task;
         Framerate _framerate;
-        bool _showDetector;
         Detector &_detector;
 
         bool _disconnected;
 
     public:
-        JpegStream(httpd_req_t *request, bool showDetector, Detector &detector);
+        JpegStream(httpd_req_t *request, Detector &detector);
         void run();
+
+        static void toggleDetectorStream();
 
     private:
         static size_t sendStatic(void *p, size_t index, const void *data, size_t len);
