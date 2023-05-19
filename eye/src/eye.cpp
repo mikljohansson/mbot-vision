@@ -48,50 +48,7 @@ static void oledDisplayImage(const uint8_t *image, size_t width, size_t height) 
     oled->drawGrayscaleBitmap(0, 0, image, width, height);
 }
 
-void setup() {
-    randomSeed(1);
-
-    // Allocate the ObjectDectector first, it needs to allocate the tensor arena on the internal memory 
-    // system heap. If the tensors got allocated in external SPI RAM the model latency is much higher
-    detector = new ObjectDetector();
-
-    oled = new Adafruit_SSD1306(128, 32);
-    wifiMulti = new WiFiMulti();
-    logger = new DataLogger();
-    camera = new Camera(*logger);
-    mbot = new MBotPWM(*detector);
-
-    if (!LOG_TO_SDCARD) {
-        pinMode(MV_LED_PIN, OUTPUT);
-        digitalWrite(MV_LED_PIN, LOW);
-
-        ledcAttachPin(MV_FLASH_PIN, MV_FLASH_CHAN);
-        ledcSetup(MV_FLASH_CHAN, 151379, 8);
-        ledcWrite(MV_FLASH_CHAN, 0);
-    }
-
-    Serial.begin(115200);
-    Serial.println("Starting up");
-    Serial.printf("Core %d, clock %d MHz\n", xPortGetCoreID(), getCpuFrequencyMhz());
-    serialPrint("Total heap: %d\n", ESP.getHeapSize());
-    serialPrint("Free heap: %d\n", ESP.getFreeHeap());
-    serialPrint("Total PSRAM: %d\n", ESP.getPsramSize());
-    serialPrint("Free PSRAM: %d\n", ESP.getFreePsram());
-    
-    // Initialize display
-    if (!LOG_TO_SDCARD) {
-        Wire.setPins(MV_SDA_PIN, MV_SCL_PIN);
-        oled->begin();
-        oled->setTextColor(1);
-        oled->setTextSize(1);
-    }
-    oledPrint("Starting up");
-
-    // Start the camera frame capture task. Start this before initializing the wifi and wait for the first 
-    // frame to be captured, otherwise sporadic brownouts and wifi connections issues arise.
-    camera->begin();
-    fbqueue->release(fbqueue->take(FrameBufferItem()));
-
+void setupWifi() {
     // Connect to Wifi
     oledPrint("WiFi connecting");
     for (auto network : wifiNetworks) {
@@ -143,6 +100,53 @@ void setup() {
         Serial.println(now);
         setTime(time(nullptr));
     }
+}
+
+void setup() {
+    randomSeed(1);
+
+    // Allocate the ObjectDectector first, it needs to allocate the tensor arena on the internal memory 
+    // system heap. If the tensors got allocated in external SPI RAM the model latency is much higher
+    detector = new ObjectDetector();
+
+    oled = new Adafruit_SSD1306(128, 32);
+    wifiMulti = new WiFiMulti();
+    logger = new DataLogger();
+    camera = new Camera(*logger);
+    mbot = new MBotPWM(*detector);
+
+    if (!LOG_TO_SDCARD) {
+        pinMode(MV_LED_PIN, OUTPUT);
+        digitalWrite(MV_LED_PIN, LOW);
+
+        ledcAttachPin(MV_FLASH_PIN, MV_FLASH_CHAN);
+        ledcSetup(MV_FLASH_CHAN, 151379, 8);
+        ledcWrite(MV_FLASH_CHAN, 0);
+    }
+
+    Serial.begin(115200);
+    Serial.println("Starting up");
+    Serial.printf("Core %d, clock %d MHz\n", xPortGetCoreID(), getCpuFrequencyMhz());
+    serialPrint("Total heap: %d\n", ESP.getHeapSize());
+    serialPrint("Free heap: %d\n", ESP.getFreeHeap());
+    serialPrint("Total PSRAM: %d\n", ESP.getPsramSize());
+    serialPrint("Free PSRAM: %d\n", ESP.getFreePsram());
+    
+    // Initialize display
+    if (!LOG_TO_SDCARD) {
+        Wire.setPins(MV_SDA_PIN, MV_SCL_PIN);
+        oled->begin();
+        oled->setTextColor(1);
+        oled->setTextSize(1);
+    }
+    oledPrint("Starting up");
+
+    setupWifi();
+
+    // Start the camera frame capture task. Start this before initializing the wifi and wait for the first 
+    // frame to be captured, otherwise sporadic brownouts and wifi connections issues arise.
+    camera->begin();
+    fbqueue->release(fbqueue->take(FrameBufferItem()));
 
     // Initialize SD card
     if (LOG_TO_SDCARD) {

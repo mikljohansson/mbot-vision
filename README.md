@@ -1,6 +1,6 @@
 # mBot Vision
 
-Equip your [Makeblock mBot](https://www.makeblock.com/) with a cheap ESP32-CAM and use machine learning 
+Equip your [Makeblock mBot](https://www.makeblock.com/) with a cheap ESP32 and use machine learning 
 to recognize objects you've train it to. The included example will make the mBot chase after colored balls!
 
 ![mBot vision](mbot.jpg)
@@ -15,6 +15,11 @@ ensures the object position can be read from the kids-friendly Scratch / Blocks 
 The ESP32 also includes a web-server with a camera live stream, so you can use to see what
 the robot sees when you drive it around. The live stream can also show you the model 
 inputs (low-res images) and outputs (object heatmaps).
+
+Supported boards
+
+ * The [ESP32-S3-WROOM CAM](https://www.aliexpress.com/item/1005004960637276.html) is a very capable MCU which can process ML models at great speed with its vector instruction set.
+ * The [ESP32 CAM](https://www.aliexpress.com/item/1005003804757059.html) is a cheap but fairly capable MCU which can process ML models at a reasonable speed, e.g. 1-5 fps depending on the model.
 
 # Programming the ESP32
 
@@ -46,7 +51,7 @@ cd tflite-micro-esp-examples
 
 # If you're not targeting an new ESP32-S3 MCU then remove all the optimized kernels for that 
 # architecture since this will otherwise cause build problems in PlatformIO
-find components/esp-nn -name '*esp32s3*' -exec rm -f {} ';'
+#find components/esp-nn -name '*esp32s3*' -exec rm -f {} ';'
 
 # Remove all the default tfmicro kernels in favor of the ESP32 optimized kernels (otherwise they'll get used by the linker for some reason)
 for f in components/tflite-lib/tensorflow/lite/micro/kernels/esp_nn/*.cc; do rm components/tflite-lib/tensorflow/lite/micro/kernels/`basename $f`; done
@@ -73,8 +78,11 @@ The program works better if you use the "Upload" mode (compiled C++ code) instea
 
 ![Block programming](scratch.png)
 
+# ESP32-S3 CAM hardware setup
 
-# ESP32 hardware setup
+Install the CH343 USB-serial driver from here https://github.com/WCHSoftGroup/ch343ser_linux
+
+# ESP32-CAM hardware setup
 
 See [wiring.h](eye/include/mbot-vision/wiring.h) for how to wire up the ESP32 with the mBot
 
@@ -258,6 +266,7 @@ sudo vi /etc/udev/rules.d/99-usb-aliases.rules
 
 SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", SYMLINK+="ftdi"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="auriga"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", SYMLINK+="esp32s3cam"
 
 # sudo rm -f /usr/lib/udev/rules.d/90-brltty-device.rules
 

@@ -11,9 +11,46 @@ FrameBufferQueue *fbqueue;
 static TaskHandle_t cameraTask;
 static Framerate framerate("Camera framerate: %02f\n");
 
+#ifdef BOARD_ESP32S3CAM
+
+// https://github.com/Freenove/Freenove_ESP32_S3_WROOM_Board
+camera_config_t mv_camera_config {
+    .pin_pwdn = -1,
+    .pin_reset = -1,
+    .pin_xclk = 15,
+    .pin_sscb_sda = 4,
+    .pin_sscb_scl = 5,
+    .pin_d7 = 16,
+    .pin_d6 = 17,
+    .pin_d5 = 18,
+    .pin_d4 = 12,
+    .pin_d3 = 10,
+    .pin_d2 = 8,
+    .pin_d1 = 9,
+    .pin_d0 = 11,
+    .pin_vsync = 6,
+    .pin_href = 7,
+    .pin_pclk = 13,
+    
+    .xclk_freq_hz = 20000000,
+    .ledc_timer = MV_CAM_TIMER,
+    .ledc_channel = MV_CAM_CHAN,
+    .pixel_format = PIXFORMAT_JPEG,
+    // .frame_size = FRAMESIZE_UXGA, // needs 234K of framebuffer space
+    // .frame_size = FRAMESIZE_SXGA, // needs 160K for framebuffer
+    // .frame_size = FRAMESIZE_XGA, // needs 96K or even smaller FRAMESIZE_SVGA - can work if using only 1 fb
+    //.frame_size = FRAMESIZE_QVGA,
+    .frame_size = FRAMESIZE_VGA,
+    .jpeg_quality = 40, //0-63 lower numbers are higher quality
+    .fb_count = 2       // if more than one i2s runs in continous mode.  Use only with jpeg
+};
+
+
+#else
+
 // https://github.com/geeksville/Micro-RTSP/blob/master/src/OV2640.cpp
 // https://randomnerdtutorials.com/esp32-cam-ai-thinker-pinout/
-camera_config_t mv_camera_aithinker_config {
+camera_config_t mv_camera_config {
     .pin_pwdn = 32,
     .pin_reset = -1,
 
@@ -47,6 +84,8 @@ camera_config_t mv_camera_aithinker_config {
     .jpeg_quality = 40, //0-63 lower numbers are higher quality
     .fb_count = 2       // if more than one i2s runs in continous mode.  Use only with jpeg
 };
+
+#endif
 
 FrameBufferQueue::FrameBufferQueue() {
     // Create an unlocked mutex to manipulate the queue
@@ -167,7 +206,7 @@ void Camera::run() {
     // Initialize camera
     Serial.println("Initializing camera");
     while (true) {
-        esp_err_t err = esp_camera_init(&mv_camera_aithinker_config);
+        esp_err_t err = esp_camera_init(&mv_camera_config);
         if (err == ESP_OK) {
             break;
         }
@@ -190,7 +229,7 @@ void Camera::run() {
             framerate.tick();
             generation++;
             
-            if (mv_camera_aithinker_config.pixel_format == PIXFORMAT_JPEG) {
+            if (mv_camera_config.pixel_format == PIXFORMAT_JPEG) {
                 _logger.logJpeg(fb->buf, fb->len);
             }
 
