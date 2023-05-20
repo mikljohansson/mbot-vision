@@ -141,12 +141,13 @@ void setup() {
     }
     oledPrint("Starting up");
 
-    setupWifi();
-
     // Start the camera frame capture task. Start this before initializing the wifi and wait for the first 
     // frame to be captured, otherwise sporadic brownouts and wifi connections issues arise.
     camera->begin();
     fbqueue->release(fbqueue->take(FrameBufferItem()));
+
+    // Connect to the Wifi
+    setupWifi();
 
     // Initialize SD card
     if (LOG_TO_SDCARD) {
