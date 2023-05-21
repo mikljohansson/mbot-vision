@@ -1,6 +1,6 @@
 # mBot Vision
 
-Equip your [Makeblock mBot](https://www.makeblock.com/) with a cheap ESP32, camera and use machine learning 
+Equip your [Makeblock mBot](https://www.makeblock.com/) with a cheap ESP32 and camera, then use machine learning 
 to recognize objects you've train it to. The included example will make the mBot chase after colored balls!
 
 ![mBot vision](mbot.jpg)
