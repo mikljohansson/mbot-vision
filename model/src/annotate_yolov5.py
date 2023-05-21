@@ -34,7 +34,21 @@ pbar = tqdm.tqdm(total=len(files))
 
 for i in range(0, len(files), args.batch_size):
     batch = files[i:(i + args.batch_size)]
-    results = model(batch)
+    try:
+        results = model(batch)
+    except OSError:
+        # Some training images are likely corrupt
+        filtered_batch = []
+        for filename in batch:
+            try:
+                image = Image.open(filename)
+                image.load()
+                filtered_batch.append(filename)
+            except OSError:
+                print(filename, "is corrupt")
+
+        batch = filtered_batch
+        results = model(batch)
 
     for filename, image, predictions in zip(results.files, results.ims, results.pred):
         image = Image.fromarray(image, 'RGB') if isinstance(image, np.ndarray) else image

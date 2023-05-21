@@ -8,7 +8,7 @@
 #define DIRECTORY_FORMAT "/sdcard/mbot-vision-%d%02d%02d-%02d%02d"
 
 DataLogger::DataLogger()
- : _enabled(LOG_TO_SDCARD), _active(false), _lastLogged(0) {}
+ : _enabled(MV_SAVE_IMAGE_ENABLED), _active(false), _lastLogged(0) {}
 
 bool DataLogger::isEnabled() {
     return _enabled;
@@ -50,7 +50,7 @@ bool DataLogger::begin() {
 void DataLogger::logJpeg(const uint8_t *data, size_t length) {
     unsigned long ts = millis();
     
-    if (!_enabled || _lastLogged >= (ts - 1000) || !_enabled || !_active) {
+    if (!_enabled || _lastLogged >= (ts - MV_SAVE_IMAGE_INTERVAL) || !_enabled || !_active) {
         return;
     }
 

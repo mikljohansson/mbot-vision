@@ -3,9 +3,13 @@
 
 #include <driver/ledc.h>
 
-#ifdef BOARD_ESP32S3CAM
+// Number of milliseconds between saved training data images
+#define MV_SAVE_IMAGE_INTERVAL   1000
+
+
 
 // See pinout at https://github.com/Freenove/Freenove_ESP32_S3_WROOM_Board
+#ifdef BOARD_ESP32S3CAM
 
 // Joystick comms with MBot (used if you program the mBot using Scratch / Blocks)
 #define MV_PWMX_CHAN    LEDC_CHANNEL_4
@@ -28,7 +32,7 @@
 #define MV_CAM_TIMER    LEDC_TIMER_1
 
 // Enable logging images to SD card
-#define LOG_TO_SDCARD   true
+#define MV_SAVE_IMAGE_ENABLED   true
 
 // If the SDcard pins are used for other things too
 #define BOARD_OVERLOADED_SDCARD_PINS    false
@@ -40,10 +44,12 @@
 #define MV_HS2_CLK       39
 #define MV_HS2_DATA0     40
 #define MV_HS2_DATA1     -1
+#endif
 
-#else 
+
 
 // See pinout at https://randomnerdtutorials.com/esp32-cam-ai-thinker-pinout/
+#ifdef BOARD_ESP32CAM
 
 // Joystick comms with MBot (used if you program the mBot using Scratch / Blocks)
 #define MV_PWMX_CHAN    LEDC_CHANNEL_4
@@ -68,7 +74,7 @@
 // Enable logging images to SDcard. If you enable this you must also physically disconnect all other 
 // peripherals and pins, like the flash and mBot UART, since the same pins are used for the SDcard 
 // on the ESP32-CAM board.
-#define LOG_TO_SDCARD   false
+#define MV_SAVE_IMAGE_ENABLED   false
 
 // If the SDcard pins are used for other things too
 #define BOARD_OVERLOADED_SDCARD_PINS    true
@@ -80,7 +86,8 @@
 #define MV_HS2_CLK       14
 #define MV_HS2_DATA0     2
 #define MV_HS2_DATA1     4
-
 #endif
+
+
 
 #endif // _MV_WIRING_H_

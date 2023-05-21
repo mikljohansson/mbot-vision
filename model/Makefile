@@ -121,8 +121,8 @@ dataset/recorded/train: src/annotate_$(TEACHER_MODEL).py src/image.py dataset/re
 
 	touch dataset/recorded/train
 
-dataset: dataset/coco/train dataset/recorded/train
-#dataset: dataset/recorded/train
+#dataset: dataset/coco/train dataset/recorded/train
+dataset: dataset/recorded/train
 
 $(EXPERIMENT)/coco.pth:
 	PYTHONPATH=. accelerate launch $(ACCELERATE_ARGS) --gradient_accumulation_steps $(COCO_ACCUMULATION_STEPS) \
