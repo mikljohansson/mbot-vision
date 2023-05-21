@@ -12,11 +12,11 @@ INFERENCE_EXTENSION = $(shell echo $(INFERENCE_ENGINE) | sed "s/TINYMAIX/tmdl/" 
 
 # Pretrained FD-MobileNet v1 with depth_multiplier=0.25 with some model surgery to insert a UNet segmentation head into it
 #MODEL ?= fdmobilenet_025_10x6
-MODEL ?= fdmobilenet_025_5x3
+#MODEL ?= fdmobilenet_025_5x3
 
 # Pretrained MobileNet v1 with depth_multiplier=0.25 with some model surgery to insert a UNet segmentation head into it
 # https://github.com/osmr/imgclsmob/tree/master/pytorch (lots of other pretrained models available here too)
-#MODEL ?= mobilenet_v1_025_10x6
+MODEL ?= mobilenet_v1_025_10x6
 #MODEL ?= mobilenet_v1_025_5x3
 
 # Slimmed down MobileNet v3 (not pretrained)
@@ -51,13 +51,13 @@ OUTPUT_HEIGHT = 12
 MEMORY_FORMAT = CHANNELS_LAST
 
 # This teacher/annotator can only do round/elliptical objects, e.g. sport balls and oranges
-TEACHER_MODEL = yolov5
+#TEACHER_MODEL = yolov5
 
 # This teacher/annotator can handle any COCO object type and uses YOLOv5 for image segmentation, but the edges of the masks aren't perfect
 #TEACHER_MODEL = yolov5_seg
 
-# This teacher/annotator can handle any COCO object type and uses YOLOv5 for image segmentation, but the aspect ratio of the output masks from this model is incorrect for some reason
-#TEACHER_MODEL = yolov8_seg
+# This teacher/annotator can handle any COCO object type and uses YOLOv8 for image segmentation
+TEACHER_MODEL = yolov8_seg
 
 # Batch size used when annotating your recorded data, you might need to lower this if your GPU runs out of memory
 TEACHER_BATCH_SIZE ?= 32

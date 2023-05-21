@@ -41,8 +41,7 @@ for i in range(0, len(files), args.batch_size):
         filtered_batch = []
         for filename in batch:
             try:
-                image = Image.open(filename)
-                image.load()
+                image = Image.open(filename).load()
                 filtered_batch.append(filename)
             except OSError:
                 print(filename, "is corrupt")

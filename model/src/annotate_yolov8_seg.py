@@ -18,7 +18,7 @@ parser.add_argument('-i', '--input', required=True, help='Directory of images to
 parser.add_argument('-a', '--annotated', required=True, help='Directory to store annotated images')
 parser.add_argument('-t', '--train', required=True, help='Directory to store training images')
 parser.add_argument('-c', '--classes', required=True, help='Comma separated list of classes of interest')
-parser.add_argument('-m', '--model', default='yolov8n-seg.pt', help='What YOLOv8 segmentation model to use, see Segmentation at https://github.com/ultralytics/ultralytics#models')
+parser.add_argument('-m', '--model', default='yolov8x-seg.pt', help='What YOLOv8 segmentation model to use, see Segmentation at https://github.com/ultralytics/ultralytics#models')
 parser.add_argument('--batch-size', type=int, help='Batch size', default=32)
 parser.add_argument('--input-width', type=int, help='Input width', default=160)
 parser.add_argument('--input-height', type=int, help='Input height', default=120)
@@ -40,7 +40,20 @@ pbar = tqdm.tqdm(total=len(files))
 
 for i in range(0, len(files), args.batch_size):
     batch = files[i:(i + args.batch_size)]
-    results = model(batch)
+    try:
+        results = model(batch)
+    except OSError:
+        # Some training images are likely corrupt
+        filtered_batch = []
+        for filename in batch:
+            try:
+                image = Image.open(filename).load()
+                filtered_batch.append(filename)
+            except OSError:
+                print(filename, "is corrupt")
+
+        batch = filtered_batch
+        results = model(batch)
 
     for filename, result in zip(batch, results):
         if not result.boxes or not result.masks:
@@ -52,10 +65,10 @@ for i in range(0, len(files), args.batch_size):
 
         for clsid, confidence, instance_mask in zip(result.boxes.cls, result.boxes.conf, result.masks):
             classname = result.names[int(clsid)]
-            if classname not in labels_of_interest or confidence < 0.25:
+            if classname not in labels_of_interest or confidence < 0.05:
                 continue
 
-            instance_mask = F.interpolate(instance_mask.data.unsqueeze(0).unsqueeze(0), size=mask.shape[1:], mode='bilinear')
+            instance_mask = F.interpolate(instance_mask.data.unsqueeze(0), size=mask.shape[1:], mode='bilinear')
             mask += instance_mask[0].cpu()
             found = True
 

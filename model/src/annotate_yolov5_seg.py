@@ -30,8 +30,18 @@ args = parser.parse_args()
 class ImageDataset(torch.utils.data.Dataset):
     def __init__(self, images):
         super(ImageDataset).__init__()
-        self.images = images
-        self.sample_count = len(images)
+
+        # Some training images may be corrupt
+        filtered = []
+        for filename in images:
+            try:
+                Image.open(filename).load()
+                filtered.append(filename)
+            except OSError:
+                print(filename, "is corrupt")
+
+        self.images = filtered
+        self.sample_count = len(filtered)
         self.size = 640
 
     def __len__(self):
