@@ -7,8 +7,13 @@ String indexDocument = R"doc(<html>
   <head>
     <link rel="icon" href="data:;base64,=">
     <script type="text/javascript">
-        const post = (url) => {
+        const post = (url, onload) => {
             var xmlHttp = new XMLHttpRequest();
+
+            if (onload) {
+              xmlHttp.onload = () => onload(xmlHttp.response);
+            }
+
             xmlHttp.open("POST", url, true);
             xmlHttp.send(null);
         };
@@ -52,12 +57,19 @@ String indexDocument = R"doc(<html>
               crosshair.style.top = Math.round(rect.height * blob.y) + "px";
               crosshair.style.display = blob.detected ? "inline" : "none";
               //crosshair.style.color = blob.color;
-              console.log(e.data);
+              //console.log(e.data);
           };
         }
 
         const handleToggleDetectorStream = () => {
-          post(`/toggleDetectorStream`);
+          post("/toggleDetectorStream");
+        };
+
+        const handleToggleImageLogging = () => {
+          post("/toggleImageLogging", (response) => {
+            console.log("Image logger is now", response);
+            document.getElementById("imageLoggingButton").style.color = response === "active" ? "#ff0000" : "#999";
+          });
         };
 
         const handleLoad = () => {
@@ -116,9 +128,10 @@ String indexDocument = R"doc(<html>
     <div id="container">
       <div id="crosshair">&#x2316</div>
       <table>
-        <td class="button" onClick="javascript:handleFlashToggle();">&#x1F4A1;</td>
-        <td class="inputcell"><input type="range" min="0" max="175" value="0" id="flash" oninput="handleFlash(this.value);" onchange="handleFlash(this.value);"></td>
-        <td class="button" style="color: #999;" onClick="javascript:handleToggleDetectorStream();">&#x267B;</td>
+        <td class="button" onClick="javascript:handleFlashToggle();" title="Toggle the floodlights on/off">&#x1F4A1;</td>
+        <td class="inputcell"><input type="range" min="0" max="175" value="0" id="flash" oninput="handleFlash(this.value);" onchange="handleFlash(this.value);" title="Floodlight brightness"></td>
+        <td class="button" style="color: #999;" onClick="javascript:handleToggleDetectorStream();" title="Show ML model input and output">&#x267B;</td>
+        <td id="imageLoggingButton" class="button" style="color: #999;" onClick="javascript:handleToggleImageLogging();" title="Record training data to SDcard">&#x25C9;</td>
       </table>
     </div>
     <div class="container detector" />

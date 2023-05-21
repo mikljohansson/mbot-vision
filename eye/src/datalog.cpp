@@ -8,31 +8,49 @@
 #define DIRECTORY_FORMAT "/sdcard/mbot-vision-%d%02d%02d-%02d%02d"
 
 DataLogger::DataLogger()
- : _enabled(false), _lastLogged(0) {}
+ : _enabled(LOG_TO_SDCARD), _active(false), _lastLogged(0) {}
+
+bool DataLogger::isEnabled() {
+    return _enabled;
+}
+
+bool DataLogger::isActive() {
+    return _active;
+}
+
+void DataLogger::setActive(bool active) {
+    _active = _enabled && active;
+}
 
 bool DataLogger::begin() {
-    int len = snprintf(NULL, 0, DIRECTORY_FORMAT, year(), month(), day(), hour(), minute());
-    if (len) {
-        char buf[len];
-        sprintf(buf, DIRECTORY_FORMAT, year(), month(), day(), hour(), minute());
-        _directory = buf;
-    }
-    
-    //SD_MMC.setPins(MV_HS2_CLK, MV_HS2_CMD, MV_HS2_DATA0, MV_HS2_DATA1, MV_HS2_DATA2, MV_HS2_DATA3);
-    SD_MMC.setPins(MV_HS2_CLK, MV_HS2_CMD, MV_HS2_DATA0);
-    _enabled = SD_MMC.begin();
+    if (_enabled) {
+        int len = snprintf(NULL, 0, DIRECTORY_FORMAT, year(), month(), day(), hour(), minute());
+        if (len) {
+            char buf[len];
+            sprintf(buf, DIRECTORY_FORMAT, year(), month(), day(), hour(), minute());
+            _directory = buf;
+        }
+        
+        //SD_MMC.setPins(MV_HS2_CLK, MV_HS2_CMD, MV_HS2_DATA0, MV_HS2_DATA1, MV_HS2_DATA2, MV_HS2_DATA3);
+        SD_MMC.setPins(MV_HS2_CLK, MV_HS2_CMD, MV_HS2_DATA0);
+        bool result = SD_MMC.begin("/sdcard", true);
 
-    if (!_enabled) {
-        Serial.println("Failed to initialize SD card");
+        if (!result) {
+            Serial.println("Failed to initialize SD card");
+            _enabled = false;
+            _active = false;
+        }
+        
+        return result;
     }
 
-    return _enabled;
+    return true;
 }
 
 void DataLogger::logJpeg(const uint8_t *data, size_t length) {
     unsigned long ts = millis();
     
-    if (!_enabled || _lastLogged >= (ts - 1000)) {
+    if (!_enabled || _lastLogged >= (ts - 1000) || !_enabled || !_active) {
         return;
     }
 

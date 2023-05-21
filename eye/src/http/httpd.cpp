@@ -5,6 +5,7 @@
 #include "mbot-vision/image/camera.h"
 #include "mbot-vision/framerate.h"
 #include "mbot-vision/detection/detector.h"
+#include "mbot-vision/datalog.h"
 #include "mbot-vision/wiring.h"
 #include "mbot-vision/common.h"
 #include "mbot-vision/http/index.h"
@@ -12,6 +13,7 @@
 #include "mbot-vision/http/event-stream.h"
 
 static Detector *detector;
+static DataLogger *logger;
 
 esp_err_t handleIndex(httpd_req_t *req) {
     Serial.println("Sending index.html");
@@ -50,7 +52,7 @@ esp_err_t handleFlash(httpd_req_t *req) {
                 duty = 0;
             }
             
-            if (!LOG_TO_SDCARD) {
+            if (!BOARD_OVERLOADED_SDCARD_PINS || !logger->isEnabled()) {
                 Serial.println(String("Turning flash to value ") + duty);
                 ledcWrite(MV_FLASH_CHAN, duty);
             }
@@ -88,6 +90,23 @@ httpd_uri_t uri_toggle_detector_stream = {
     .handler  = handleToggleDetectorStream,
     .user_ctx = NULL
 };
+
+
+
+esp_err_t handleToggleImageLogging(httpd_req_t *req) {
+    Serial.println("Toggling image logging");
+    logger->setActive(!logger->isActive());
+    httpd_resp_set_hdr(req, "Connection", "close");
+    return httpd_resp_sendstr(req, logger->isActive() ? "active" : "inactive");
+}
+
+httpd_uri_t uri_toggle_image_logging = {
+    .uri      = "/toggleImageLogging",
+    .method   = HTTP_POST,
+    .handler  = handleToggleImageLogging,
+    .user_ctx = NULL
+};
+
 
 
 void runJpegStream(void *p) {
@@ -142,8 +161,9 @@ httpd_uri_t uri_events = {
 
 
 
-void httpdRun(Detector &d) {
+void httpdRun(Detector &d, DataLogger &l) {
     detector = &d;
+    logger = &l;
 
     // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/protocols/esp_http_server.html
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
@@ -156,6 +176,7 @@ void httpdRun(Detector &d) {
         httpd_register_uri_handler(server, &uri_index);
         httpd_register_uri_handler(server, &uri_flash);
         httpd_register_uri_handler(server, &uri_toggle_detector_stream);
+        httpd_register_uri_handler(server, &uri_toggle_image_logging);
         httpd_register_uri_handler(server, &uri_stream);
         httpd_register_uri_handler(server, &uri_events);
     }

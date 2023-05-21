@@ -27,21 +27,19 @@ static MBotPWM *mbot;
 
 template <typename... T>
 void oledPrint(const char *message, T... args) {
-    if (LOG_TO_SDCARD) {
-        return;
+    if (!BOARD_OVERLOADED_SDCARD_PINS || !logger->isEnabled()) {
+        oled->clearDisplay();
+        oled->setCursor(0, 0);
+        
+        int len = snprintf(NULL, 0, message, args...);
+        if (len) {
+            char buf[len];
+            sprintf(buf, message, args...);
+            oled->print(buf);
+        }
+        
+        oled->display();
     }
-    
-    oled->clearDisplay();
-    oled->setCursor(0, 0);
-    
-    int len = snprintf(NULL, 0, message, args...);
-    if (len) {
-        char buf[len];
-        sprintf(buf, message, args...);
-        oled->print(buf);
-    }
-    
-    oled->display();
 }
 
 static void oledDisplayImage(const uint8_t *image, size_t width, size_t height) {
@@ -86,7 +84,7 @@ void setupWifi() {
     oledPrint("%s %s", WiFi.getHostname(), ip.toString().c_str());
 
     // Use NTP to configure local time
-    if (LOG_TO_SDCARD) {
+    if (logger->isEnabled()) {
         Serial.print("Retrieving time: ");
         configTime(0, 0, "pool.ntp.org");
         time_t now = time(nullptr);
@@ -115,7 +113,7 @@ void setup() {
     camera = new Camera(*logger);
     mbot = new MBotPWM(*detector);
 
-    if (!LOG_TO_SDCARD) {
+    if (!BOARD_OVERLOADED_SDCARD_PINS || !logger->isEnabled()) {
         pinMode(MV_LED_PIN, OUTPUT);
         digitalWrite(MV_LED_PIN, LOW);
 
@@ -133,7 +131,7 @@ void setup() {
     serialPrint("Free PSRAM: %d\n", ESP.getFreePsram());
     
     // Initialize display
-    if (!LOG_TO_SDCARD) {
+    if (!BOARD_OVERLOADED_SDCARD_PINS || !logger->isEnabled()) {
         Wire.setPins(MV_SDA_PIN, MV_SCL_PIN);
         oled->begin();
         oled->setTextColor(1);
@@ -150,24 +148,22 @@ void setup() {
     setupWifi();
 
     // Initialize SD card
-    if (LOG_TO_SDCARD) {
-        Serial.println("Initializing memory card");
-        logger->begin();
-    }
+    Serial.println("Initializing memory card");
+    logger->begin();
 
     // Start object detector
     detector->begin();
     detector->wait();
 
     // Connect to Mbot
-    if (!LOG_TO_SDCARD) {
+    if (!BOARD_OVERLOADED_SDCARD_PINS || !logger->isEnabled()) {
         mbot->begin();
     }
 
     // Start webserver
-    httpdRun(*detector);
+    httpdRun(*detector, *logger);
 
-    if (!LOG_TO_SDCARD) {
+    if (!BOARD_OVERLOADED_SDCARD_PINS || !logger->isEnabled()) {
         digitalWrite(MV_LED_PIN, HIGH);
         ledcWrite(MV_FLASH_CHAN, 0);
     }
