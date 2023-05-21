@@ -13,7 +13,7 @@ static Framerate framerate("Camera framerate: %02f\n");
 
 #ifdef BOARD_ESP32S3CAM
 
-// https://github.com/Freenove/Freenove_ESP32_S3_WROOM_Board
+// See pinout at https://github.com/Freenove/Freenove_ESP32_S3_WROOM_Board
 camera_config_t mv_camera_config {
     .pin_pwdn = -1,
     .pin_reset = -1,
@@ -39,15 +39,15 @@ camera_config_t mv_camera_config {
     // .frame_size = FRAMESIZE_UXGA, // needs 234K of framebuffer space
     // .frame_size = FRAMESIZE_SXGA, // needs 160K for framebuffer
     // .frame_size = FRAMESIZE_XGA, // needs 96K or even smaller FRAMESIZE_SVGA - can work if using only 1 fb
-    //.frame_size = FRAMESIZE_QVGA,
     .frame_size = FRAMESIZE_VGA,
+    //.frame_size = FRAMESIZE_QVGA,
     .jpeg_quality = 40, //0-63 lower numbers are higher quality
     .fb_count = 2       // if more than one i2s runs in continous mode.  Use only with jpeg
 };
 
-
 #else
 
+// See pinout at 
 // https://github.com/geeksville/Micro-RTSP/blob/master/src/OV2640.cpp
 // https://randomnerdtutorials.com/esp32-cam-ai-thinker-pinout/
 camera_config_t mv_camera_config {
@@ -79,8 +79,8 @@ camera_config_t mv_camera_config {
     // .frame_size = FRAMESIZE_UXGA, // needs 234K of framebuffer space
     // .frame_size = FRAMESIZE_SXGA, // needs 160K for framebuffer
     // .frame_size = FRAMESIZE_XGA, // needs 96K or even smaller FRAMESIZE_SVGA - can work if using only 1 fb
-    //.frame_size = FRAMESIZE_QVGA,
     .frame_size = FRAMESIZE_VGA,
+    //.frame_size = FRAMESIZE_QVGA,
     .jpeg_quality = 40, //0-63 lower numbers are higher quality
     .fb_count = 2       // if more than one i2s runs in continous mode.  Use only with jpeg
 };

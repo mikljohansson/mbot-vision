@@ -123,10 +123,10 @@ ObjectDetector::ObjectDetector()
     // https://github.com/espressif/tflite-micro-esp-examples/blob/master/examples/person_detection/main/main_functions.cc#L70
     
     // Note: Using fast system RAM seems to cause some issues with the lwIP/webserver, which might not be getting enough system 
-    // memory to function so it's best to use SPI RAM for the tensors instead.
+    // memory to function so it's probably best to instead use SPI RAM for the intermedate tensors.
     //tensor_arena = (uint8_t *)heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     
-    // Allocates on SPI RAM (slower but bigger memory)
+    // Allocates on SPI RAM (a little bit slower, but bigger memory)
     tensor_arena = new uint8_t[kTensorArenaSize];
 
     if (!tensor_arena) {

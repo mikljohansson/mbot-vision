@@ -18,10 +18,10 @@ inputs (low-res images) and outputs (object heatmaps).
 
 Supported boards
 
- * The [ESP32-S3-WROOM CAM](https://www.aliexpress.com/item/1005004960637276.html) is a very capable MCU which can process ML models at great speed with its vector instruction set.
- * The [ESP32 CAM](https://www.aliexpress.com/item/1005003804757059.html) is a cheap but fairly capable MCU which can process ML models at a reasonable speed, e.g. 1-5 fps depending on the model.
+ * The [ESP32-S3-WROOM CAM](https://www.aliexpress.com/item/1005004960637276.html) (or the more expensive [ESP32-S3-EYE](https://github.com/espressif/esp-who/blob/master/docs/en/get-started/ESP32-S3-EYE_Getting_Started_Guide.md)) is a capable MCU with improved ML performance using vector instructions and faster PSRAM, e.g. 5-10 FPS depending on the model.
+ * The [ESP32 CAM](https://www.aliexpress.com/item/1005003804757059.html) is a cheap but capable MCU with reasonable ML performance, e.g. 1-5 FPS depending on the model.
 
-# Programming the ESP32
+# Programming the MCU
 
 ## Inference engines
 
@@ -49,7 +49,7 @@ cd tflite-micro-esp-examples
 # Optionally update the tflite-micro base to get compatiblity with latest TFLite ops and kernels
 #scripts/sync_from_tflite_micro.sh
 
-# If you're not targeting an new ESP32-S3 MCU then remove all the optimized kernels for that 
+# If you're targeting a ESP32 then remove all the optimized kernels for the new ESP32-S3
 # architecture since this will otherwise cause build problems in PlatformIO
 #find components/esp-nn -name '*esp32s3*' -exec rm -f {} ';'
 
@@ -60,6 +60,10 @@ for f in components/tflite-lib/tensorflow/lite/micro/kernels/esp_nn/*.cc; do rm 
 ## Create a WiFi config
 
 Copy [mbot-vision-config.h-example](eye/include/mbot-vision-config.h-example) to `eye/include/mbot-vision-config.h` and edit it to include the names and passwords of your WiFi networks.
+
+## ESP32-S3-WROOM CAM setup
+
+Install the CH343 USB-serial driver from here https://github.com/WCHSoftGroup/ch343ser_linux so the board is detected as a /dev/tty* device
 
 ## Program the microcontroller using PlatformIO
 
@@ -78,11 +82,7 @@ The program works better if you use the "Upload" mode (compiled C++ code) instea
 
 ![Block programming](scratch.png)
 
-# ESP32-S3 CAM hardware setup
-
-Install the CH343 USB-serial driver from here https://github.com/WCHSoftGroup/ch343ser_linux
-
-# ESP32-CAM hardware setup
+# Hardware setup and wiring
 
 See [wiring.h](eye/include/mbot-vision/wiring.h) for how to wire up the ESP32 with the mBot
 
@@ -118,7 +118,7 @@ See [mbot-pwm.cpp](eye/src/mbot-pwm.cpp) for details.
   it means that in this case you must also disconnect all other wires like the 
   floodlights and mBot connection.
 
-## FDTI programmer
+## FDTI programmer for the ESP32-CAM board
 
 The ESP32-CAM unfortunately doesn't have a RST pin, so in order to get the programmer to 
 automatically put it into programming/flashing mode you need to solder a wire onto the 
