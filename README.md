@@ -192,7 +192,12 @@ classes. For example apples and oranges can easily be confused for sports balls 
 
 Put your own recorded videos into `dataset/recorded/videos` and images into 
 `dataset/recorded/images`. You can for example record some videos of the objects you 
-want to detect, 10-20 minutes of video should be enough to get going with.
+want to detect using your smartphone, 10-20 minutes of video should be enough to get going with.
+
+Another option is to put a SDcard into the ESP32 and use the record button on 
+the robot web to start recording images. The put these jpg images into `dataset/recorded/images`. 
+By default it will record one image per second, so you can drive the mBot robot around via 
+remote and record a set of training images.
 
 Run `make dataset` to create the training dataset. This will:
 

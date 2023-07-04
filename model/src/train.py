@@ -10,7 +10,8 @@ import torch
 import torch.nn.functional as F
 import torchvision
 from accelerate import Accelerator
-from ranger21 import Ranger21
+#from ranger21 import Ranger21
+#from sophia import SophiaG
 from torch.optim import AdamW
 from torch.utils.data import RandomSampler
 from torch.utils.tensorboard import SummaryWriter
@@ -68,6 +69,7 @@ dataloader = torch.utils.data.DataLoader(
     batch_size=args.batch_size,
     num_workers=(min(args.parallel, 1) if args.context_window_steps > 1 else args.parallel),
     shuffle=True,
+
     #sampler=StridedSampler(dataset, args.batch_size)
 )
 dataloader = accelerator.prepare(dataloader)
@@ -77,8 +79,12 @@ dataloader = accelerator.prepare(dataloader)
 #                      num_epochs=args.epochs,
 #                      num_batches_per_epoch=(len(dataloader) / args.accumulation_steps))
 
+#optimizer = SophiaG(model.parameters(),
+#                    lr=args.learning_rate)
+
 optimizer = AdamW(model.parameters(),
                   lr=args.learning_rate)
+
 
 def get_optimizer(cfg, model):
     accumulate = args.accumulation_steps
@@ -180,6 +186,7 @@ def calculate_loss(outputs, targets, unknown_masks, z_loss=1e-4):
 
 last_logged_image = 0
 cuda_available = torch.cuda.is_available()
+torch.manual_seed(1234)
 
 for epoch in range(args.epochs):
     context_window_batches = []

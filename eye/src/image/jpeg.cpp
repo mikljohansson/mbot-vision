@@ -4,12 +4,8 @@
 #include <tjpgdcnf.h>
 #include <tjpgd.h>
 
-// Downscale 1/4 (1 << 2)
-#define JPEG_SCALE_FACTOR   3
-
-JpegDecoder::JpegDecoder() {
-    _output = 0;
-}
+JpegDecoder::JpegDecoder(uint8_t scaleFactor)
+ : _scaleFactor(scaleFactor), _output(0) {}
 
 JpegDecoder::~JpegDecoder() {
     free(_output);
@@ -41,12 +37,12 @@ bool JpegDecoder::decompress(const uint8_t *input, size_t len) {
 
     // Allocate output frame buffer if needed
     if (!_output) {
-        _outputwidth = (_jdec.width >> JPEG_SCALE_FACTOR);
-        _outputheight = (_jdec.height >> JPEG_SCALE_FACTOR);
+        _outputwidth = (_jdec.width >> _scaleFactor);
+        _outputheight = (_jdec.height >> _scaleFactor);
         _output = (uint8_t*)malloc(JD_BPP * _outputwidth * _outputheight);
     }
 
-    res = jd_decomp(&_jdec, writeStatic, JPEG_SCALE_FACTOR);
+    res = jd_decomp(&_jdec, writeStatic, _scaleFactor);
     
     if (res != JDR_OK) {
         Serial.println("Failed to decode JPEG image");

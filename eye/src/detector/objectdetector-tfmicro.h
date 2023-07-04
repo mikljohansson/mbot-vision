@@ -23,8 +23,8 @@ constexpr int scratchBufSize = 39 * 1024;
 constexpr int scratchBufSize = 0;
 #endif
 // An area of memory to use for input, output, and intermediate arrays.
-constexpr int kTensorArenaSize = 81 * 1024 + scratchBufSize;
-//constexpr int kTensorArenaSize = 512 * 1024 + scratchBufSize;
+//constexpr int kTensorArenaSize = 81 * 1024 + scratchBufSize;
+constexpr int kTensorArenaSize = 512 * 1024 + scratchBufSize;
 static uint8_t *tensor_arena;
 
 static TfLiteTensor *_input;
@@ -118,7 +118,8 @@ static void cropAndQuantizeImage(const uint8_t *pixels, size_t image_width, size
 }
 
 ObjectDetector::ObjectDetector()
- : _framerate("Object detector framerate: %02f\n"), _detected({0, 0, false}), _lastoutputbuf(0) {
+ : _decoder(sqrt(MV_CAM_WIDTH / MBOT_VISION_MODEL_INPUT_WIDTH)), 
+   _framerate("Object detector framerate: %02f\n"), _detected({0, 0, false}), _lastoutputbuf(0) {
     // Allocate the tensor memory block on internal memory which is much smaller but a bit faster than external SPI RAM
     // https://github.com/espressif/tflite-micro-esp-examples/blob/master/examples/person_detection/main/main_functions.cc#L70
     

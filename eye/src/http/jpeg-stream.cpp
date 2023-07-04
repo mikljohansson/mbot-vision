@@ -1,6 +1,8 @@
 #include "mbot-vision/http/jpeg-stream.h"
 
 #include <memory>
+#include "mbot-vision-model.h"
+#include "mbot-vision-config.h"
 
 static volatile bool showDetectorStream = false;
 
@@ -51,7 +53,7 @@ void JpegStream::run() {
         if (fb.frame->format == PIXFORMAT_JPEG) {
             if (showDetectorStream) {
                 if (!decoder) {
-                    decoder.reset(new JpegDecoder());
+                    decoder.reset(new JpegDecoder((int)sqrt(MV_CAM_WIDTH / MBOT_VISION_MODEL_INPUT_WIDTH)));
                 }
 
                 if (decoder->decompress(fb.frame->buf, fb.frame->len)) {

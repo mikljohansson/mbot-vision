@@ -17,7 +17,7 @@ class JpegDecoder {
         size_t _inputlen, _inputoffset;
 
     public:
-        JpegDecoder();
+        JpegDecoder(uint8_t scaleFactor);
         ~JpegDecoder();
 
         uint8_t *getOutputFrame();

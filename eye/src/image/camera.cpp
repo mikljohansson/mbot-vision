@@ -6,6 +6,7 @@
 #include "mbot-vision/common.h"
 #include "mbot-vision/wiring.h"
 #include "mbot-vision/datalog.h"
+#include "mbot-vision-config.h"
 
 FrameBufferQueue *fbqueue;
 static TaskHandle_t cameraTask;
@@ -36,11 +37,7 @@ camera_config_t mv_camera_config {
     .ledc_timer = MV_CAM_TIMER,
     .ledc_channel = MV_CAM_CHAN,
     .pixel_format = PIXFORMAT_JPEG,
-    // .frame_size = FRAMESIZE_UXGA, // needs 234K of framebuffer space
-    // .frame_size = FRAMESIZE_SXGA, // needs 160K for framebuffer
-    // .frame_size = FRAMESIZE_XGA, // needs 96K or even smaller FRAMESIZE_SVGA - can work if using only 1 fb
-    .frame_size = FRAMESIZE_VGA,
-    //.frame_size = FRAMESIZE_QVGA,
+    .frame_size = MV_CAM_FRAME_SIZE,
     .jpeg_quality = 40, //0-63 lower numbers are higher quality
     .fb_count = 2       // if more than one i2s runs in continous mode.  Use only with jpeg
 };

@@ -1,6 +1,13 @@
 #ifndef _MV_CONFIG_H_
 #define _MV_CONFIG_H_
 
+#include <sensor.h>
+
+// What framesize to snap images in (see sensor.h)
+#define MV_CAM_FRAME_SIZE   FRAMESIZE_VGA
+#define MV_CAM_WIDTH        640
+#define MV_CAM_HEIGHT       480
+
 // Minimum model output probability/confidence to count as a positive detection
 #define MV_DETECTION_PROBABILITY    0.4
 

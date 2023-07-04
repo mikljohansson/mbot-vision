@@ -10,24 +10,24 @@ del backbone.output
 # Delete the AvgPool
 del backbone.features[-1:]
 
-# Avoid the last 2 downsampling which causes too low resolution
-backbone.features[-2][0].dw_conv.conv.stride = 1
-backbone.features[-1][0].dw_conv.conv.stride = 1
-
 # Remove the last convolution with too many channels
 del backbone.features[-1][-1]
 
+# Avoid the last downsampling which causes too low resolution
+backbone.features[-1][0].dw_conv.conv.stride = 1
+
 # Inject tensor capturing to emulate a UNet by concatenating high-resolution tensors to the SegmentationNeck
 captures = []
-backbone.features[-4].append(CaptureTensor(captures))
-backbone.captures = (captures, (16,))
+backbone.features[-3].append(CaptureTensor(captures))
+backbone.captures = (captures, (32,))
 
 model = dict(
     type=MobileNetSegmentV1,
     backbone=backbone,
     backbone_out_ch=128,
-    input_size=(80, 48),    # WxH
+    input_size=(160, 96),   # WxH
     output_size=(20, 12),   # WxH
+    upsampling_factor=1,
 )
 
 solver = dict(

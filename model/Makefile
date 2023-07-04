@@ -12,11 +12,11 @@ INFERENCE_EXTENSION = $(shell echo $(INFERENCE_ENGINE) | sed "s/TINYMAIX/tmdl/" 
 
 # Pretrained FD-MobileNet v1 with depth_multiplier=0.25 with some model surgery to insert a UNet segmentation head into it
 #MODEL ?= fdmobilenet_025_10x6
-#MODEL ?= fdmobilenet_025_5x3
+MODEL ?= fdmobilenet_025_5x3
 
 # Pretrained MobileNet v1 with depth_multiplier=0.25 with some model surgery to insert a UNet segmentation head into it
 # https://github.com/osmr/imgclsmob/tree/master/pytorch (lots of other pretrained models available here too)
-MODEL ?= mobilenet_v1_025_10x6
+#MODEL ?= mobilenet_v1_025_10x6
 #MODEL ?= mobilenet_v1_025_5x3
 
 # Slimmed down MobileNet v3 (not pretrained)
@@ -39,8 +39,8 @@ CONTEXT_WINDOW_STEPS ?= 1
 DEPLOY ?= no
 
 # Model input and output dimensions
-INPUT_WIDTH	= 80
-INPUT_HEIGHT = 48
+INPUT_WIDTH	= 160
+INPUT_HEIGHT = 96
 OUTPUT_WIDTH = 20
 OUTPUT_HEIGHT = 12
 
@@ -143,7 +143,7 @@ $(EXPERIMENT)/recorded.tflite: $(EXPERIMENT)/recorded.pth
 $(EXPERIMENT)/recorded.tmdl: $(EXPERIMENT)/recorded.tflite
 	python ../../TinyMaix/tools/tflite2tmdl.py $< $@ int8 0 $(INPUT_HEIGHT),$(INPUT_WIDTH),3 $(OUTPUT_HEIGHT),$(OUTPUT_WIDTH),1
 
-output/mbot-vision-model.cpp: $(EXPERIMENT)/recorded.$(INFERENCE_EXTENSION)
+output/mbot-vision-model.h output/mbot-vision-model.cpp: $(EXPERIMENT)/recorded.$(INFERENCE_EXTENSION)
 	mkdir -p output
 
 	cp $< output/mbot-vision-model

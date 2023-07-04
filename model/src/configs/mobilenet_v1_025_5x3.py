@@ -1,4 +1,5 @@
 from pytorchcv.models.mobilenet import mobilenet_wd4
+from torch import nn
 
 from src.models.mobilenet_v1 import MobileNetSegmentV1, CaptureTensor
 
@@ -13,17 +14,23 @@ del backbone.features[-1:]
 # Remove the last downsampling block which has too many channels
 del backbone.features[-1]
 
+# Downsample more
+backbone.features[-2][1].dw_conv.conv.stride = 2
+
 # Inject tensor capturing to emulate a UNet by concatenating high-resolution tensors to the SegmentationNeck
 captures = []
-backbone.features[-3].append(CaptureTensor(captures))
+backbone.features[-2][0] = nn.Sequential(
+    backbone.features[-2][0],
+    CaptureTensor(captures),
+)
 backbone.features[-2].append(CaptureTensor(captures))
-backbone.captures = (captures, (32, 64))
+backbone.captures = (captures, (64, 64))
 
 model = dict(
     type=MobileNetSegmentV1,
     backbone=backbone,
     backbone_out_ch=128,
-    input_size=(80, 48),    # WxH
+    input_size=(160, 96),   # WxH
     output_size=(20, 12),   # WxH,
     upsampling_factor=2
 )
