@@ -2,8 +2,8 @@ from src.models.mvnet import MVNetModel
 
 model = dict(
     type=MVNetModel,
-    input_size=(80, 48),    # WxH
-    output_size=(20, 12),   # WxH
+    input_size=(160, 96),   # WxH
+    output_size=(20, 12),   # WxH,
     attention=True,
     memory=False,
     channels=[3, 6, 6, 12, 24, 48]

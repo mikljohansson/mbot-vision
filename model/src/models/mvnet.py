@@ -1,6 +1,7 @@
 import math
 
 import torch
+import torch.nn.functional as F
 
 from torch import nn
 from einops import einsum
@@ -165,10 +166,23 @@ class ChannelShuffle(nn.Module):
 
 
 class MeanMax(nn.Module):
+    def __init__(self, groups=1):
+        super().__init__()
+        self.groups = groups
+
     def forward(self, x):
-        return torch.cat([
-            torch.mean(x, dim=1, keepdim=True),
-            torch.max(x, dim=1, keepdim=True)[0]], 1)
+        group_size = x.size()[1] // self.groups
+        result = []
+
+        assert group_size > 0
+        assert x.size()[1] % self.groups == 0
+
+        for group in range(self.groups):
+            group_slice = x[:, (group * group_size):((group + 1) * group_size)]
+            result.append(torch.mean(group_slice, dim=1, keepdim=True))
+            result.append(torch.max(group_slice, dim=1, keepdim=True)[0])
+
+        return torch.cat(result, dim=1)
 
 
 class ExpandChannels(nn.Module):
@@ -233,15 +247,16 @@ class ChannelAndSpatialAttention(nn.Module):
     """
     def __init__(self, in_ch, kernel_size=7, dilation=1, heads=4):
         super().__init__()
-        self.in_ch = in_ch
+        heads = min(in_ch // 2, heads)
+        heads = math.gcd(in_ch, heads)
+
         self.sqe1 = BiasedSqueezeAndExcitation(in_ch)
-        self.meanmax = MeanMax()
+        self.meanmax = MeanMax(heads)
 
         self.conv = nn.Sequential(
-            #nn.Conv2d(2, heads, kernel_size, padding=(kernel_size // 2), bias=False),
-            nn.Conv2d(2, heads, kernel_size=(1, kernel_size), stride=1,
+            nn.Conv2d(heads * 2, heads, kernel_size=(1, kernel_size), stride=1,
                       padding=(0, (kernel_size * dilation - dilation) // 2),
-                      dilation=dilation, bias=False),
+                      dilation=dilation, groups=heads, bias=False),
             nn.Conv2d(heads, heads, kernel_size=(kernel_size, 1), stride=1,
                       padding=((kernel_size * dilation - dilation) // 2, 0),
                       dilation=dilation, groups=heads, bias=False),
@@ -292,30 +307,30 @@ class ChannelAndSpatialAttention(nn.Module):
         return x * ymul + ybias
 
 
-class GlobalAttention(nn.Module):
+class GlobalContext(nn.Module):
     """
-    Spatial attention Global Context Block modified to support multi-head attention
+    Channel attention (Global Context Block) modified to support multi-head attention
     https://arxiv.org/pdf/1904.11492.pdf
     https://github.com/xvjiarui/GCNet/blob/master/mmdet/ops/gcb/context_block.py
-    https://github.com/lucidrains/imagen-pytorch/blob/main/imagen_pytorch/imagen_pytorch.py#L909
+    https://github.com/lucidrains/imagen-pytorch/blob/main/imagen_pytorch/imagen_pytorch.py#L940
     """
     def __init__(self, in_ch, attention_heads=4):
         super().__init__()
         self.attention_heads = attention_heads
-        self.key_conv = nn.Conv2d(in_ch, self.attention_heads, 1)
+        self.key_conv = nn.Conv2d(in_ch, self.attention_heads, kernel_size=1)
 
         # ConvNeXt uses an inverted bottleneck design
         mid_ch = in_ch * 4
 
         self.mul_term = nn.Sequential(
-            nn.Conv2d(in_ch * self.attention_heads, mid_ch, 1),
+            nn.Conv2d(in_ch * self.attention_heads, mid_ch, kernel_size=1),
             nn.Mish(),
             nn.Conv2d(mid_ch, in_ch, 1),
             nn.Sigmoid()
         )
 
         self.bias_term = nn.Sequential(
-            nn.Conv2d(in_ch * self.attention_heads, mid_ch, 1),
+            nn.Conv2d(in_ch * self.attention_heads, mid_ch, kernel_size=1),
             nn.Mish(),
             nn.Conv2d(mid_ch, in_ch, 1),
         )
@@ -340,16 +355,22 @@ class GlobalAttention(nn.Module):
         attention = attention.reshape(b, c * self.attention_heads, 1, 1)
         # [B, C * A, 1, 1]
 
-        return x * self.mul_term(attention) + self.bias_term(attention)
+        mul = self.mul_term(attention)
+        bias = self.bias_term(attention)
+        # [B, C, 1, 1]
+
+        return x * mul + bias
 
 
-class GhostAttention(nn.Sequential):
+class GhostAttention(nn.Module):
     """
     Gated spatial attention module (DFC attention) using only convolutions
     https://github.com/huawei-noah/Efficient-AI-Backbones/tree/master/ghostnetv2_pytorch
     """
     def __init__(self, in_ch, out_ch, kernel_size=5, dilation=1, **kwargs):
-        super().__init__(
+        super().__init__()
+
+        self.attention = nn.Sequential(
             nn.AvgPool2d(kernel_size=2, stride=2),
             nn.Conv2d(in_ch, out_ch, 1, bias=False, **kwargs),
             nn.BatchNorm2d(out_ch),
@@ -365,19 +386,24 @@ class GhostAttention(nn.Sequential):
             nn.UpsamplingNearest2d(scale_factor=2)
         )
 
+    def forward(self, x):
+        return x * self.attention(x)
 
-class ParallelGhostAttention(nn.Sequential):
+
+class ParallelGhostAttention(nn.Module):
     """
     Gated spatial attention module (DFC attention) with channel attention
     https://github.com/huawei-noah/Efficient-AI-Backbones/tree/master/ghostnetv2_pytorch
     """
     def __init__(self, in_ch, out_ch, kernel_size=5, dilation=1):
+        super().__init__()
+
         mid_ch = max(in_ch // 2, out_ch // 2)
-        super().__init__(
+        self.attention = nn.Sequential(
             nn.AvgPool2d(kernel_size=2, stride=2),
-            nn.BatchNorm2d(mid_ch),
             DenseBlock(
                 nn.Conv2d(in_ch, mid_ch, 1, bias=False),
+                nn.BatchNorm2d(mid_ch),
                 ConcatParallel(
                     nn.Conv2d(mid_ch, mid_ch, kernel_size=(1, kernel_size), stride=1,
                               padding=(0, (kernel_size * dilation - dilation) // 2),
@@ -387,13 +413,180 @@ class ParallelGhostAttention(nn.Sequential):
                               dilation=dilation, groups=out_ch, bias=False),
                 ),
             ),
-            BiasedSqueezeAndExcitation(mid_ch * 3),
-            #ChannelShuffle(3),
-            #nn.Conv2d(mid_ch * 3, out_ch, 1, groups=mid_ch),
-            nn.Conv2d(mid_ch * 3, out_ch, 1),
+            BiasedSqueezeAndExcitation(in_ch + mid_ch * 2),
+            nn.Conv2d(in_ch + mid_ch * 2, out_ch, 1),
             nn.Sigmoid(),
             nn.UpsamplingNearest2d(scale_factor=2)
         )
+
+    def forward(self, x):
+        return x * self.attention(x)
+
+
+class LinearAttention(nn.Module):
+    """
+    https://github.com/tatp22/linformer-pytorch
+    https://github.com/lucidrains/linear-attention-transformer
+    https://github.com/lucidrains/imagen-pytorch/blob/main/imagen_pytorch/imagen_pytorch.py#L871
+    """
+    def __init__(
+            self,
+            dim,
+            dim_head = 32,
+            heads = 8,
+            dropout = 0.05,
+            context_dim = None,
+            **kwargs
+    ):
+        super().__init__()
+        self.scale = dim_head ** -0.5
+        self.heads = heads
+        inner_dim = dim_head * heads
+        self.norm = ChanLayerNorm(dim)
+
+        self.nonlin = nn.SiLU()
+
+        self.to_q = nn.Sequential(
+            nn.Dropout(dropout),
+            nn.Conv2d(dim, inner_dim, 1, bias = False),
+            nn.Conv2d(inner_dim, inner_dim, 3, bias = False, padding = 1, groups = inner_dim)
+        )
+
+        self.to_k = nn.Sequential(
+            nn.Dropout(dropout),
+            nn.Conv2d(dim, inner_dim, 1, bias = False),
+            nn.Conv2d(inner_dim, inner_dim, 3, bias = False, padding = 1, groups = inner_dim)
+        )
+
+        self.to_v = nn.Sequential(
+            nn.Dropout(dropout),
+            nn.Conv2d(dim, inner_dim, 1, bias = False),
+            nn.Conv2d(inner_dim, inner_dim, 3, bias = False, padding = 1, groups = inner_dim)
+        )
+
+        self.to_context = nn.Sequential(nn.LayerNorm(context_dim), nn.Linear(context_dim, inner_dim * 2, bias = False)) if exists(context_dim) else None
+
+        self.to_out = nn.Sequential(
+            nn.Conv2d(inner_dim, dim, 1, bias = False),
+            ChanLayerNorm(dim)
+        )
+
+    def forward(self, fmap, context = None):
+        h, x, y = self.heads, *fmap.shape[-2:]
+
+        fmap = self.norm(fmap)
+        q, k, v = map(lambda fn: fn(fmap), (self.to_q, self.to_k, self.to_v))
+        q, k, v = map(lambda t: rearrange(t, 'b (h c) x y -> (b h) (x y) c', h = h), (q, k, v))
+
+        if exists(context):
+            assert exists(self.to_context)
+            ck, cv = self.to_context(context).chunk(2, dim = -1)
+            ck, cv = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h = h), (ck, cv))
+            k = torch.cat((k, ck), dim = -2)
+            v = torch.cat((v, cv), dim = -2)
+
+        q = q.softmax(dim = -1)
+        k = k.softmax(dim = -2)
+
+        q = q * self.scale
+
+        context = einsum('b n d, b n e -> b d e', k, v)
+        out = einsum('b n d, b d e -> b n e', q, context)
+        out = rearrange(out, '(b h) (x y) d -> b (h d) x y', h = h, x = x, y = y)
+
+        out = self.nonlin(out)
+        return self.to_out(out)
+
+
+class LowRankSelfAttention(nn.Module):
+    """
+    Approximates self-attention using a low-rank projection matrix that reduces the number of
+    items in the sequence to a low and constant number. Extended with multiple heads
+    https://www.frontiersin.org/articles/10.3389/fpls.2022.978564/full
+    """
+    def __init__(self, in_ch, width, height, k=256, heads=4):
+        super().__init__()
+
+        self.in_ch = in_ch
+        self.k = k
+        self.heads = math.gcd(in_ch, heads)
+        self.qk_ch = max(in_ch // 8, 4) * self.heads
+
+        self.in_conv = nn.Conv2d(in_ch, self.qk_ch * 2 + in_ch, kernel_size=1)
+        self.key_proj = nn.Linear(width * height, k)
+        self.value_proj = nn.Linear(width * height, k)
+        self.att_dropout = nn.Dropout(p=0.2)
+
+        self.scale = 1. / math.sqrt(self.qk_ch // self.heads)
+
+        self.out_dropout = nn.Dropout(p=0.2)
+
+    def forward(self, x):
+        b, _, h, w = x.size()
+
+        # [B, C, H, W]
+        query, key, value = self.in_conv(x).split([self.qk_ch, self.qk_ch, self.in_ch], dim=1)
+        query = query.flatten(start_dim=2).transpose(1, 2)
+        # [B, H*W, qk_ch]
+
+        # Project to low rank spatial dimentionality
+        key = self.key_proj(key.flatten(start_dim=2)).transpose(1, 2)
+        # [B, k, qk_ch]
+
+        value = self.value_proj(value.flatten(start_dim=2)).transpose(1, 2)
+        # [B, k, in_ch]
+
+        # Add heads dimension
+        query = query.view(b, h*w, self.heads, self.qk_ch // self.heads).transpose(1, 2)
+        # [B, nh, H*W, qk_ch/nh]
+
+        key = key.view(b, self.k, self.heads, self.qk_ch // self.heads).transpose(1, 2)
+        # [B, nh, k, qk_ch/nh]
+
+        value = value.view(b, self.k, self.heads, self.in_ch // self.heads).transpose(1, 2)
+        # [B, nh, k, in_ch/nh]
+
+        # Calculate attention scores
+        att = query @ key.transpose(-2, -1) * self.scale
+        att = F.softmax(att, dim=-1)
+        att = self.att_dropout(att)
+        # [B, nh, H*W, k]
+
+        # Retrieve attention values
+        y = att @ value
+        # [B, nh, H*W, in_ch/nh]
+
+        y = y.transpose(1, 2).view(b, h, w, self.in_ch).movedim(-1, 1).contiguous()
+        # [B, C, H, W]
+
+        # Output
+        y = self.out_dropout(y)
+        return x + y
+
+
+class LinearAttention(nn.Module):
+    """
+    Approximates self-attention using a low-rank projection matrix
+    https://www.frontiersin.org/articles/10.3389/fpls.2022.978564/full
+    """
+    def __init__(self, in_ch, k=512):
+        super().__init__()
+
+
+    def forward(self, x):
+        # [B, C, H, W]
+        query = self.query_conv(x)
+        key = self.key_conv(x)
+        value = self.value_conv(x)
+
+        # [B, C, H*W]
+        query = query.flatten(start_dim=2).transpose(1, 2)
+        key = key.flatten(start_dim=2).transpose(1, 2)
+        value = value.flatten(start_dim=2).transpose(1, 2)
+
+        # Project key and value to low-rank dimensionality
+        # [B, K, C]
+        key = self.key_proj
 
 
 class ConvNeXt(nn.Sequential):
@@ -510,7 +703,7 @@ class MVNetModel(nn.Module):
         self.memory = WorkingMemory(enabled=memory)
 
         # Let attention modules know about the working memory being enabled/disabled
-        with self.memory.enter(None) as ctx:
+        with self.memory.enter(None):
             self.backbone = nn.Sequential(
                 # 80x48 input
                 WorkingMemoryConv2d(channels[0], channels[1], kernel_size=1) if memory else nn.Identity(),

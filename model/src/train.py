@@ -189,6 +189,7 @@ cuda_available = torch.cuda.is_available()
 torch.manual_seed(1234)
 
 for epoch in range(args.epochs):
+    # Keeps track of the batches in the context window
     context_window_batches = []
 
     for batch in dataloader:
@@ -198,11 +199,13 @@ for epoch in range(args.epochs):
         prev_image_paths = None
         cumulative_loss = 0.
 
+        # Train over this sliding context window
         for ix, (inputs, targets, unknown_masks, image_paths) in enumerate(context_window_batches):
             context_utilization = 0.
 
             if context is not None:
-                context_mask = list(1. if is_next_frame(prev_image_paths[i], image_paths[i]) else 0. for i in range(len(image_paths)))
+                # Mask out contexts if the image sequence breaks (i.e. the previous and current images don't match)
+                context_mask = list(int(is_next_frame(prev_image_paths[i], image_paths[i])) for i in range(len(image_paths)))
                 context_utilization = sum(context_mask) / len(context_mask)
                 context_mask = torch.tensor(context_mask, dtype=context.dtype, device=context.device, requires_grad=False)
                 outputs = model(inputs, context, context_mask)
@@ -224,6 +227,7 @@ for epoch in range(args.epochs):
             writer.add_scalar(f'timestep-loss/loss_step_' + str(ix), loss, step)
             writer.add_scalar(f'timestep-utilization/context_step_' + str(ix), context_utilization, step)
 
+        # Remove the oldest batches in the context window
         while len(context_window_batches) >= args.context_window_steps:
             context_window_batches.pop(0)
 
